@@ -1,0 +1,82 @@
+{
+	// The name of the container.
+	"name": "DLSR Dev Container",
+
+	// The container base image.
+	"image": "mcr.microsoft.com/vscode/devcontainers/base:ubuntu",
+
+	// The features to install within the container.
+	"features": {
+
+		// Install python.
+		"ghcr.io/devcontainers/features/python:1": {},
+
+		// Install the Docker CLI.
+		// This will access the Docker daemon on the host machine.
+		"ghcr.io/devcontainers/features/docker-outside-of-docker:1": {}
+	},
+
+	// Additional customizations which are applied when the container is created.
+	"customizations": {
+
+		// VS Code customizations.
+		"vscode": {
+
+			// VS Code settings.
+			"settings": {
+
+				// Set the default python path.
+				"python.pythonPath": ".venv/bin/python",
+				
+				// Set the default Python interpreter.
+				"python.defaultInterpreterPath": ".venv/bin/python",
+				
+				// Automatically activate the virtual environment in the integrated terminal.
+				"python.terminal.activateEnvInCurrentTerminal": true,
+
+				// Set the default python path.
+				"python.linting.pylintPath": ".venv/bin/pylint"
+			},
+
+			// VS Code extensions to install.
+			"extensions": [
+
+				// Install the Go extension.
+				"ms-python.python",
+				
+				// Install autopep extension.
+				"ms-python.autopep8",
+
+				// Install pylint extension.
+				"ms-python.pylint",
+
+				// Install ghe GitHub Actions extension.
+				"github.vscode-github-actions",
+
+				// Install the GitHub Copilot extension.
+				"GitHub.copilot",
+
+				// Install the GitHub Copilot Chat extension.
+				"GitHub.copilot-chat",
+
+				// Install the GitLens extension.
+				"eamodio.gitlens",
+				
+				// Install the Markdown Lint extension.
+				"DavidAnson.vscode-markdownlint"
+			]
+		}
+	},
+
+	// Additional arguments passed to 'docker run'.
+	"runArgs": [
+		"--network=host",
+		"--name=dlsr-dev-container"
+	],
+
+	// Commands to run after the container has been created.
+	"postCreateCommand": "python -m venv .venv",
+
+	// Commands to run after the container has been started.
+	"postStartCommand": ". ./.venv/bin/activate && pip install -r requirements.txt"
+}

@@ -1,0 +1,11 @@
+# Ignore python cache.
+__pycache__/
+
+# Ignore python virtual environment.
+.venv/
+
+# Ignore the data directory.
+.data/
+
+# Ignore the checkpoint directory.
+.checkpoints/
