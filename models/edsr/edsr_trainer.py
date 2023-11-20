@@ -66,7 +66,7 @@ class EdsrTrainer:
                     current_step_in_set = current_step % performed_steps + 1
 
                 self.__log(
-                    f'step: {current_step_in_set}/{steps}, completed: {current_step_in_set / steps * 100:.0f}%, loss: {current_loss.numpy():.2f}', indent_level=1, end='\r', flush=True)
+                    f'step: {current_step_in_set}/{steps}, completed: {current_step_in_set / steps * 100:.0f}%, loss: {current_loss.numpy():.2f}', indent_level=1, end='\n', flush=True)
 
                 checkpoint.step.assign_add(1)
 
