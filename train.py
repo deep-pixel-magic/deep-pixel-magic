@@ -87,7 +87,7 @@ def main():
     # model.fit(data_set_training, epochs=300, steps_per_epoch=800)
 
     EdsrTrainer(model=model, loss=MeanAbsoluteError()).train(
-        data_set_training, epochs=300, steps=30)
+        data_set_training, epochs=300, steps=800)
 
     model.save_weights(out_file)
 
