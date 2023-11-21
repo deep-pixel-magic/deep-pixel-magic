@@ -75,7 +75,7 @@ def main():
     # plots[1, 1].imshow(element_training[1])
     # plt.show()
 
-    data_set_training = data_set_training.batch(16)
+    data_set_training = data_set_training.batch(32)
     data_set_training = data_set_training.repeat()
     data_set_training = data_set_training.prefetch(buffer_size=AUTOTUNE)
 
@@ -87,7 +87,7 @@ def main():
     # model.fit(data_set_training, epochs=300, steps_per_epoch=800)
 
     EdsrTrainer(model=model, loss=MeanAbsoluteError()).train(
-        data_set_training, epochs=300, steps=800)
+        data_set_training, epochs=11, steps=800)
 
     model.save_weights(out_file)
 

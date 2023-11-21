@@ -37,11 +37,11 @@ class EdsrTrainer:
 
         self.restore()
 
-    def train(self, train_dataset, epochs, steps):
+    def train(self, dataset, epochs, steps):
         """Trains the model.
 
         Args:
-            train_dataset: The training dataset.
+            dataset: The training dataset.
             epochs: The number of epochs.
             steps: The number of steps per epoch.
 
@@ -56,7 +56,7 @@ class EdsrTrainer:
 
             self.__log(f'epoch: {current_epoch + 1}/{epochs}')
 
-            for low_res_img, high_res_img in train_dataset.take(steps):
+            for low_res_img, high_res_img in dataset.take(steps):
                 current_step = checkpoint.step.numpy()
                 current_loss = self.__train_step(low_res_img, high_res_img)
 
