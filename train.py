@@ -86,7 +86,7 @@ def main():
     # model.compile(optimizer=optimizer, loss='mean_absolute_error')
     # model.fit(data_set_training, epochs=300, steps_per_epoch=800)
 
-    EdsrTrainer(model=model, loss=MeanAbsoluteError()).train(
+    EdsrTrainer(model=model, loss=MeanAbsoluteError(), learning_rate=PiecewiseConstantDecay(boundaries=[200000], values=[1e-4, 5e-5])).train(
         data_set_training, epochs=11, steps=800)
 
     model.save_weights(out_file)
