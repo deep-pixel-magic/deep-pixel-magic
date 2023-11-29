@@ -48,7 +48,7 @@ def main():
 
     model = EdsrNetwork().build(scale=4, num_filters=32, num_residual_blocks=8)
 
-    latest = tf.train.latest_checkpoint('./colab')
+    latest = tf.train.latest_checkpoint('./.models/latest/')
     model.load_weights(latest)
 
     prediction = model.predict(element_training[0])

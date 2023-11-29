@@ -29,7 +29,9 @@ class EdsrNetwork:
         in_shape = (None, None, 3)
 
         input_layer = layers.Input(shape=in_shape)
-        layer_stack = layers.Lambda(self.__normalize)(input_layer)
+
+        # layer_stack = layers.Lambda(self.__normalize)(input_layer)
+        layer_stack = input_layer
 
         layer_stack = residual_stack = layers.Conv2D(
             num_filters, 3, padding='same')(layer_stack)

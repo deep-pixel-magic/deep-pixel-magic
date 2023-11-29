@@ -21,7 +21,7 @@ class EdsrTrainer:
             learning_rate: The learning rate.
         """
 
-        self.vgg = VggBuilder(vgg_output_layer=20).build(
+        self.vgg = VggBuilder(vgg_output_layer=5).build(
             input_shape=(None, None, 3))
 
         self.loss = loss
@@ -121,7 +121,7 @@ class EdsrTrainer:
 
         Args:
             high_res_img: The high resolution image.
-            super_res_img: The super resolution image.
+            super_res_img: The generated super resolution image.
 
         Returns:
             The content loss.
@@ -130,8 +130,8 @@ class EdsrTrainer:
         high_res_img = preprocess_input(high_res_img)
         super_res_img = preprocess_input(super_res_img)
 
-        high_res_features = self.vgg(high_res_img) / 12.75
-        super_res_features = self.vgg(super_res_img) / 12.75
+        high_res_features = self.vgg.predict(high_res_img)
+        super_res_features = self.vgg.predict(super_res_img)
 
         return self.loss(high_res_features, super_res_features)
 
