@@ -45,7 +45,8 @@ class EdsrNetwork:
         layer_stack = self.__upsample_block(layer_stack, num_filters, scale)
         layer_stack = layers.Conv2D(3, 3, padding='same')(layer_stack)
 
-        layer_stack = layers.Lambda(self.__denormalize)(layer_stack)
+        # layer_stack = layers.Lambda(self.__denormalize)(layer_stack)
+
         return models.Model(input_layer, layer_stack, name="edsr")
 
     def __residual_block(self, input_layer, filters, scaling):
@@ -116,7 +117,7 @@ class EdsrNetwork:
     def __normalize(self, x):
         """Normalizes the input."""
 
-        return x / 255
+        return tf.cast(x, tf.float32) / 255.0
 
     def __denormalize(self, x):
         """Denormalizes the input."""
