@@ -119,7 +119,8 @@ class EdsrNetwork:
         Assumes an input interval of [0, 255].
         """
 
-        return tf.cast(x, tf.float32) / 255.0
+        # return tf.cast(x, tf.float32) / 255.0
+        return x / 255.0
 
     def __denormalize(self, x):
         """Denormalizes the input.
@@ -128,4 +129,5 @@ class EdsrNetwork:
         """
 
         # return tf.cast(x * 255, tf.uint8)
-        return tf.clip_by_value(x * 255, 0, 255)
+        # return tf.clip_by_value(x * 255, 0, 255)
+        return x * 255
