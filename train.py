@@ -75,9 +75,12 @@ def main():
     # plots[1, 1].imshow(element_training[1])
     # plt.show()
 
-    initial_data_set_cardinality = data_set_training.cardinality().numpy()
+    batch_size = 16
 
-    data_set_training = data_set_training.batch(16)
+    initial_data_set_cardinality = data_set_training.cardinality().numpy()
+    batched_data_set_cardinality = initial_data_set_cardinality // batch_size
+
+    data_set_training = data_set_training.batch(batch_size)
     data_set_training = data_set_training.repeat()
     data_set_training = data_set_training.prefetch(buffer_size=AUTOTUNE)
 
@@ -96,7 +99,7 @@ def main():
                           learning_rate=piecewise_constant_decay)
 
     trainer.train(data_set_training, epochs=11,
-                  steps=initial_data_set_cardinality)
+                  steps=batched_data_set_cardinality)
 
     model.save_weights(out_file)
 
