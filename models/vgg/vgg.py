@@ -24,7 +24,8 @@ class VggBuilder:
             The VGG model.
         """
 
-        vgg = VGG19(include_top=False, input_shape=input_shape)
-        output_shape = vgg.layers[self.vgg_output_layer].output
+        vgg = VGG19(weights="imagenet", include_top=False,
+                    input_shape=input_shape)
 
+        output_shape = vgg.layers[self.vgg_output_layer].output
         return Model(vgg.input, output_shape)
