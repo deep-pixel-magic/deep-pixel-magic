@@ -32,7 +32,7 @@ def random_crop(lr_img, hr_img, hr_crop_size=96, scale=4):
 
 
 def main():
-    out_dir = 'out/models/'
+    out_dir = '.models/'
     out_file = os.path.join(out_dir, 'model.weights')
 
     data_dir_low_res = "./.data/div2k/DIV2K_train_LR_bicubic/X4"
