@@ -33,7 +33,7 @@ class EdsrTrainer:
 
         self.checkpoint_manager = tf.train.CheckpointManager(checkpoint=self.checkpoint,
                                                              directory='./.checkpoints/edsr',
-                                                             max_to_keep=3)
+                                                             max_to_keep=15)
 
         self.restore()
 
@@ -50,13 +50,19 @@ class EdsrTrainer:
         checkpoint = self.checkpoint
         checkpoint_manager = self.checkpoint_manager
 
-        for epoch in range(epochs):
+        performed_steps = checkpoint.step.numpy()
+        performed_epochs = performed_steps // steps
+        epochs_to_run = epochs - performed_epochs
+
+        current_dataset = dataset.skip(performed_steps)
+
+        for _ in range(epochs_to_run):
             current_epoch = checkpoint.step.numpy() // steps
             performed_steps = steps * current_epoch
 
             self.__log(f'epoch: {current_epoch + 1}/{epochs}')
 
-            for low_res_img, high_res_img in dataset.take(steps):
+            for low_res_img, high_res_img in current_dataset.take(steps):
                 current_step = checkpoint.step.numpy()
                 current_loss = self.__train_step(low_res_img, high_res_img)
 

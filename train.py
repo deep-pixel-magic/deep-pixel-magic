@@ -75,7 +75,9 @@ def main():
     # plots[1, 1].imshow(element_training[1])
     # plt.show()
 
-    data_set_training = data_set_training.batch(32)
+    initial_data_set_cardinality = data_set_training.cardinality().numpy()
+
+    data_set_training = data_set_training.batch(16)
     data_set_training = data_set_training.repeat()
     data_set_training = data_set_training.prefetch(buffer_size=AUTOTUNE)
 
@@ -87,7 +89,7 @@ def main():
     # model.fit(data_set_training, epochs=300, steps_per_epoch=800)
 
     EdsrTrainer(model=model, loss=MeanAbsoluteError(), learning_rate=PiecewiseConstantDecay(boundaries=[200000], values=[1e-4, 5e-5])).train(
-        data_set_training, epochs=11, steps=800)
+        data_set_training, epochs=11, steps=initial_data_set_cardinality)
 
     model.save_weights(out_file)
 
