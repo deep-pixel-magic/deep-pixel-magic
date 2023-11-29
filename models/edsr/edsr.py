@@ -128,4 +128,4 @@ class EdsrNetwork:
         """
 
         # return tf.cast(x * 255, tf.uint8)
-        return x * 255
+        return tf.clip_by_value(x * 255, 0, 255)
