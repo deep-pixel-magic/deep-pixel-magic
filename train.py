@@ -13,7 +13,7 @@ from models.edsr.edsr import EdsrNetwork
 from models.edsr.edsr_trainer import EdsrTrainer
 
 
-def random_crop(lr_img, hr_img, hr_crop_size=96, scale=2):
+def random_crop(lr_img, hr_img, hr_crop_size=96, scale=4):
     lr_crop_size = hr_crop_size // scale
     lr_img_shape = tf.shape(lr_img)[:2]
 
@@ -88,8 +88,15 @@ def main():
     # model.compile(optimizer=optimizer, loss='mean_absolute_error')
     # model.fit(data_set_training, epochs=300, steps_per_epoch=800)
 
-    EdsrTrainer(model=model, loss=MeanAbsoluteError(), learning_rate=PiecewiseConstantDecay(boundaries=[200000], values=[1e-4, 5e-5])).train(
-        data_set_training, epochs=11, steps=initial_data_set_cardinality)
+    loss_function = MeanAbsoluteError()
+    piecewise_constant_decay = PiecewiseConstantDecay(
+        boundaries=[200000], values=[1e-4, 5e-5])
+
+    trainer = EdsrTrainer(model=model, loss=loss_function,
+                          learning_rate=piecewise_constant_decay)
+
+    trainer.train(data_set_training, epochs=11,
+                  steps=initial_data_set_cardinality)
 
     model.save_weights(out_file)
 
