@@ -21,7 +21,8 @@ class EdsrTrainer:
             learning_rate: The learning rate.
         """
 
-        self.vgg = VggBuilder().build(input_shape=(None, None, 3))
+        self.vgg = VggBuilder(vgg_output_layer=20).build(
+            input_shape=(None, None, 3))
 
         self.loss = loss
 

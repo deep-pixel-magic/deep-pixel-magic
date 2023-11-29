@@ -9,3 +9,6 @@ __pycache__/
 
 # Ignore the checkpoint directory.
 .checkpoints/
+
+# Ignore the models directory.
+.models/

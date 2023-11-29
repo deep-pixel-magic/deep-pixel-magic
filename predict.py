@@ -53,7 +53,7 @@ def main():
 
     prediction = model.predict(element_training[0])
     prediced_img = tf.squeeze(prediction)
-    prediced_img = tf.cast(prediced_img, tf.int32)
+    # prediced_img = tf.cast(prediced_img, tf.int32)
 
     img = Image.open(
         "./.data/div2k/DIV2K_valid_LR_bicubic/X4/0801x4.png").convert("RGB")
@@ -63,8 +63,7 @@ def main():
 
     img = img.resize((new_width, new_height), Image.BICUBIC)
 
-    f, plots = plt.subplots(1, 3, sharex=True, sharey=True)
-    # plots[0].imshow(tf.squeeze(element_training[0]))
+    figure, plots = plt.subplots(1, 3, sharex=True, sharey=True)
     plots[0].imshow(img)
     plots[1].imshow(prediced_img)
     plots[2].imshow(tf.squeeze(element_training[1]))
