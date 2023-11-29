@@ -127,4 +127,5 @@ class EdsrNetwork:
         Assumes a normalized input interval of [0, 1].
         """
 
-        return tf.cast(x * 255, tf.uint8)
+        # return tf.cast(x * 255, tf.uint8)
+        return x * 255

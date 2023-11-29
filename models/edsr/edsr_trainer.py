@@ -130,8 +130,8 @@ class EdsrTrainer:
         high_res_img = preprocess_input(high_res_img)
         super_res_img = preprocess_input(super_res_img)
 
-        high_res_features = self.vgg(high_res_img)
-        super_res_features = self.vgg(super_res_img)
+        high_res_features = self.vgg(high_res_img) / 12.75
+        super_res_features = self.vgg(super_res_img) / 12.75
 
         return self.loss(high_res_features, super_res_features)
 
