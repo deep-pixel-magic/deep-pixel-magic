@@ -122,7 +122,7 @@ class Dataset:
         def reporter(blocknum, blocksize, totalsize):
             progress = blocknum * blocksize / totalsize * 100
             self.__log(
-                f'downloading dataset: {progress:.2f} %', end='\n', flush=True)
+                f'downloading dataset: {progress:.2f} %', end='\r', flush=True)
 
         urllib.request.urlretrieve(
             source_url, target_file, reporthook=reporter)
