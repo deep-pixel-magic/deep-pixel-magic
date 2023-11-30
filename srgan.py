@@ -9,8 +9,8 @@ from tensorflow.python.data.experimental import AUTOTUNE
 from tensorflow.keras.losses import MeanSquaredError
 from tensorflow.keras.losses import MeanAbsoluteError
 
-from models.edsr.edsr import EdsrNetwork
-from models.edsr.edsr_trainer import EdsrTrainer
+from models.srgan.srgan import SrganNetwork
+from models.srgan.discriminator import SrganDiscriminator
 
 
 def random_crop(lr_img, hr_img, hr_crop_size=96, scale=4):
@@ -69,19 +69,8 @@ def main():
     data_set_training = data_set_training.repeat()
     data_set_training = data_set_training.prefetch(buffer_size=AUTOTUNE)
 
-    model = EdsrNetwork().build(scale=4, num_filters=32, num_residual_blocks=8)
-
-    loss_function = MeanAbsoluteError()
-    learning_rate = PiecewiseConstantDecay(
-        boundaries=[50000], values=[1e-4, 5e-5])
-
-    trainer = EdsrTrainer(model=model, loss=loss_function,
-                          learning_rate=learning_rate)
-
-    trainer.train(data_set_training, epochs=100,
-                  steps=batched_data_set_cardinality)
-
-    model.save_weights(out_file)
+    model = SrganNetwork().build()
+    discriminator = SrganDiscriminator().build()
 
 
 if __name__ == "__main__":

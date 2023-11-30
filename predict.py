@@ -48,14 +48,17 @@ def main():
 
     model = EdsrNetwork().build(scale=4, num_filters=32, num_residual_blocks=8)
 
-    latest = tf.train.latest_checkpoint('./.models/latest/')
+    latest = tf.train.latest_checkpoint('./.checkpoints/edsr/')
     model.load_weights(latest)
 
     prediction = model.predict(element_training[0])
-    prediced_img = tf.squeeze(prediction)
-    prediced_img = tf.cast(prediced_img, tf.uint8)
 
-    img_to_save = Image.fromarray(prediced_img.numpy())
+    predicted_img = tf.squeeze(prediction)
+    predicted_img = tf.clip_by_value(predicted_img, 0, 255)
+    predicted_img = tf.round(predicted_img)
+    predicted_img = tf.cast(predicted_img, tf.uint8)
+
+    img_to_save = Image.fromarray(predicted_img.numpy())
     img_to_save.save("prediction.png", "PNG")
 
     img = Image.open(
@@ -68,7 +71,7 @@ def main():
 
     figure, plots = plt.subplots(1, 3, sharex=True, sharey=True)
     plots[0].imshow(img)
-    plots[1].imshow(prediced_img)
+    plots[1].imshow(predicted_img)
     plots[2].imshow(tf.squeeze(element_training[1]))
     plt.show()
 

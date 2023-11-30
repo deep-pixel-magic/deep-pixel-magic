@@ -8,7 +8,7 @@ from tensorflow.keras import models
 class EdsrNetwork:
     """Represents an EDSR network for image super resolution.
 
-    The network is based on the paper "Enhanced Deep Residual Networks for Single Image Super-Resolution"
+    The network is based on the paper "Enhanced Deep Residual Networks for Single Image Super-Resolution".
     """
 
     def __init__(self):
@@ -26,10 +26,10 @@ class EdsrNetwork:
             residual_block_scaling: The scaling factor for the residual blocks.
         """
 
-        in_shape = (None, None, 3)
+        shape = (None, None, 3)
 
-        input_layer = layers.Input(shape=in_shape)
-        layer_stack = layers.Lambda(self.__normalize)(input_layer)
+        input_layer = layers.Input(shape=shape)
+        layer_stack = layers.Lambda(self.__normalize())(input_layer)
 
         layer_stack = residual_stack = layers.Conv2D(
             num_filters, 3, padding='same')(layer_stack)
@@ -45,7 +45,7 @@ class EdsrNetwork:
         layer_stack = self.__upsample_block(layer_stack, num_filters, scale)
         layer_stack = layers.Conv2D(3, 3, padding='same')(layer_stack)
 
-        layer_stack = layers.Lambda(self.__denormalize)(layer_stack)
+        layer_stack = layers.Lambda(self.__denormalize())(layer_stack)
         return models.Model(input_layer, layer_stack, name="edsr")
 
     def __residual_block(self, input_layer, filters, scaling):
@@ -113,21 +113,18 @@ class EdsrNetwork:
 
         return lambda x: tf.nn.depth_to_space(input=x, block_size=scale)
 
-    def __normalize(self, x):
+    def __normalize(self):
         """Normalizes the input.
 
         Assumes an input interval of [0, 255].
         """
 
-        # return tf.cast(x, tf.float32) / 255.0
-        return x / 255.0
+        return lambda x: x / 255.0
 
-    def __denormalize(self, x):
+    def __denormalize(self):
         """Denormalizes the input.
 
         Assumes a normalized input interval of [0, 1].
         """
 
-        # return tf.cast(x * 255, tf.uint8)
-        # return tf.clip_by_value(x * 255, 0, 255)
-        return x * 255
+        return lambda x: x * 255
