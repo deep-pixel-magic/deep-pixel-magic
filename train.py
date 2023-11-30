@@ -60,21 +60,6 @@ def main():
     data_set_training = data_set_training.map(lambda lr, hr: random_crop(
         lr, hr, scale=4), num_parallel_calls=AUTOTUNE)
 
-    # iterator_low_res = data_set_low_res.as_numpy_iterator()
-    # iterator_high_res = data_set_high_res.as_numpy_iterator()
-    # iterator_training = data_set_training.as_numpy_iterator()
-
-    # element_low = iterator_low_res.next()
-    # element_high = iterator_high_res.next()
-    # element_training = iterator_training.next()
-
-    # f, plots = plt.subplots(2, 2)
-    # plots[0, 0].imshow(element_low)
-    # plots[0, 1].imshow(element_high)
-    # plots[1, 0].imshow(element_training[0])
-    # plots[1, 1].imshow(element_training[1])
-    # plt.show()
-
     batch_size = 16
 
     initial_data_set_cardinality = data_set_training.cardinality().numpy()
@@ -86,11 +71,6 @@ def main():
 
     model = EdsrNetwork().build(scale=4, num_filters=32, num_residual_blocks=8)
 
-    # optimizer = optimizers.Adam(learning_rate=PiecewiseConstantDecay(
-    #     boundaries=[200000], values=[1e-4, 5e-5]))
-    # model.compile(optimizer=optimizer, loss='mean_absolute_error')
-    # model.fit(data_set_training, epochs=300, steps_per_epoch=800)
-
     loss_function = MeanAbsoluteError()
     piecewise_constant_decay = PiecewiseConstantDecay(
         boundaries=[200000], values=[1e-4, 5e-5])
@@ -98,7 +78,7 @@ def main():
     trainer = EdsrTrainer(model=model, loss=loss_function,
                           learning_rate=piecewise_constant_decay)
 
-    trainer.train(data_set_training, epochs=11,
+    trainer.train(data_set_training, epochs=100,
                   steps=batched_data_set_cardinality)
 
     model.save_weights(out_file)

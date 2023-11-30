@@ -53,9 +53,10 @@ def main():
 
     prediction = model.predict(element_training[0])
     prediced_img = tf.squeeze(prediction)
-    prediced_img = tf.cast(prediced_img, tf.int32)
+    prediced_img = tf.cast(prediced_img, tf.uint8)
 
-    print(prediced_img)
+    img_to_save = Image.fromarray(prediced_img.numpy())
+    img_to_save.save("prediction.png", "PNG")
 
     img = Image.open(
         "./.data/div2k/DIV2K_valid_LR_bicubic/X4/0801x4.png").convert("RGB")
