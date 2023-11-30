@@ -72,11 +72,11 @@ def main():
     model = EdsrNetwork().build(scale=4, num_filters=32, num_residual_blocks=8)
 
     loss_function = MeanAbsoluteError()
-    piecewise_constant_decay = PiecewiseConstantDecay(
+    learning_rate = PiecewiseConstantDecay(
         boundaries=[200000], values=[1e-4, 5e-5])
 
     trainer = EdsrTrainer(model=model, loss=loss_function,
-                          learning_rate=piecewise_constant_decay)
+                          learning_rate=learning_rate)
 
     trainer.train(data_set_training, epochs=100,
                   steps=batched_data_set_cardinality)
