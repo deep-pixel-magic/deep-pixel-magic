@@ -142,19 +142,19 @@ class SrganTrainer:
             low_res_img = tf.cast(low_res_img, tf.float32)
             high_res_img = tf.cast(high_res_img, tf.float32)
 
-            prediction = self.generator_checkpoint.model(
+            super_res_img = self.generator_checkpoint.model(
                 low_res_img, training=True)
 
-            disc_hr_out = self.discriminator_checkpoint.model(
+            high_res_out = self.discriminator_checkpoint.model(
                 high_res_img, training=True)
-            disc_sr_out = self.discriminator_checkpoint.model(
-                prediction, training=True)
+            super_res_out = self.discriminator_checkpoint.model(
+                super_res_img, training=True)
 
-            content_loss = self.__content_loss(high_res_img, prediction)
-            generator_loss = self.__generator_loss(disc_sr_out)
+            content_loss = self.__content_loss(high_res_img, super_res_img)
+            generator_loss = self.__generator_loss(super_res_out)
 
             perceptual_loss = content_loss + generator_loss * 0.001
-            disc_loss = self.__discriminator_loss(disc_hr_out, disc_sr_out)
+            disc_loss = self.__discriminator_loss(high_res_out, super_res_out)
 
         generator_variables = self.generator_checkpoint.model.trainable_variables
         discriminator_variables = self.discriminator_checkpoint.model.trainable_variables
