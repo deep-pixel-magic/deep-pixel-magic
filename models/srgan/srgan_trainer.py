@@ -50,7 +50,7 @@ class SrganTrainer:
                                                                        directory='./.cache/checkpoints/srgan/generator/',
                                                                        max_to_keep=1000)
 
-        self.discriminator_checkpoint_manager = tf.train.CheckpointManager(checkpoint=self.generator_checkpoint,
+        self.discriminator_checkpoint_manager = tf.train.CheckpointManager(checkpoint=self.discriminator_checkpoint,
                                                                            directory='./.cache/checkpoints/srgan/discriminator/',
                                                                            max_to_keep=1000)
 

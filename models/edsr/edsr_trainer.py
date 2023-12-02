@@ -120,7 +120,7 @@ class EdsrTrainer:
             content_loss = self.__content_loss(high_res_img, prediction)
             pixel_loss = self.__pixel_loss(high_res_img, prediction)
 
-            loss = content_loss * 0.99 + pixel_loss * 0.01
+            loss = content_loss * 0.8 + pixel_loss * 0.2
 
         variables = self.checkpoint.model.trainable_variables
 

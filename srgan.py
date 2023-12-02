@@ -79,7 +79,7 @@ def main():
     data_set_training = data_set_training.map(
         lambda lr, hr: random_rotate(lr, hr), num_parallel_calls=AUTOTUNE)
 
-    batch_size = 16
+    batch_size = 8
 
     initial_data_set_cardinality = data_set_training.cardinality().numpy()
     batched_data_set_cardinality = initial_data_set_cardinality // batch_size
