@@ -41,7 +41,7 @@ class SrganTrainer:
                                                             psnr=tf.Variable(-1.0),
                                                             optimizer=optimizers.Adam(
             learning_rate),
-            model=generator)
+            model=discriminator)
 
         # now = datetime.now()
         # formatted_date = now.strftime('%Y-%m-%d-%H-%M-%S')
