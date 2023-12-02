@@ -3,16 +3,19 @@ from tensorflow.keras.applications.vgg19 import VGG19
 
 
 class VggBuilder:
-    """A helper class for building a VGG model."""
+    """A helper class for building a VGG based model.
 
-    def __init__(self, vgg_output_layer=5):
+    The pretrained VGG model can be used for style transfer or perceptual loss.
+    """
+
+    def __init__(self, layer):
         """Constructor.
 
         Args:
-            vgg_output_layer: The output layer to use.
+            layer: The output layer of the pretrained VGG19 network to use.
         """
 
-        self.vgg_output_layer = vgg_output_layer
+        self.layer = layer
 
     def build(self, input_shape):
         """Creates an instance of the pretrained keraas VGG model.
@@ -24,8 +27,9 @@ class VggBuilder:
             The VGG model.
         """
 
-        vgg = VGG19(weights="imagenet", include_top=False,
+        vgg = VGG19(include_top=False, weights="imagenet",
                     input_shape=input_shape)
+        vgg.trainable = False
 
-        output_shape = vgg.layers[self.vgg_output_layer].output
-        return Model(vgg.input, output_shape)
+        model = Model(vgg.input, vgg.get_layer(self.layer).output)
+        return model

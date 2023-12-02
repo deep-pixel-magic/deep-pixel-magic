@@ -48,6 +48,6 @@ info = div2k.Info(scale=scale, subset=subset,
                   sampling=sampling, resolution=resolution)
 
 dataset = div2k.Dataset(info=info,
-                        data_dir="./.data/div2k")
+                        data_dir="./.cache/data")
 
 dataset.download()

@@ -15,8 +15,8 @@ from models.edsr.edsr_trainer import EdsrTrainer
 
 
 def main():
-    data_dir_low_res = "./.data/div2k/DIV2K_valid_LR_bicubic/X4"
-    data_dir_high_res = "./.data/div2k/DIV2K_valid_HR"
+    data_dir_low_res = "./.cache/data/DIV2K_valid_LR_bicubic/X4"
+    data_dir_high_res = "./.cache/data/DIV2K_valid_HR"
 
     image_files_low_res = sorted(tf.io.gfile.glob(data_dir_low_res + "/*.png"))
     image_files_high_res = sorted(tf.io.gfile.glob(
@@ -39,30 +39,34 @@ def main():
     data_set_training = data_set_training.batch(1)
 
     iterator_training = data_set_training.as_numpy_iterator()
-    element_training = iterator_training.next()
+
+    sample_img = 2
+    element_training = list(iterator_training)[sample_img]
 
     # f, plots = plt.subplots(1, 2)
     # plots[0].imshow(element_training[0])
     # plots[1].imshow(element_training[1])
     # plt.show()
 
-    model = EdsrNetwork().build(scale=4, num_filters=32, num_residual_blocks=8)
+    model = EdsrNetwork().build(scale=4, num_filters=64, num_residual_blocks=16)
 
-    latest = tf.train.latest_checkpoint('./.checkpoints/edsr/')
+    latest = tf.train.latest_checkpoint('./.cache/models/edsr')
     model.load_weights(latest)
 
     prediction = model.predict(element_training[0])
 
     predicted_img = tf.squeeze(prediction)
-    predicted_img = tf.clip_by_value(predicted_img, 0, 255)
-    predicted_img = tf.round(predicted_img)
+    # predicted_img = tf.clip_by_value(predicted_img, 0, 255)
+    # predicted_img = tf.round(predicted_img)
     predicted_img = tf.cast(predicted_img, tf.uint8)
 
     img_to_save = Image.fromarray(predicted_img.numpy())
     img_to_save.save("prediction.png", "PNG")
 
     img = Image.open(
-        "./.data/div2k/DIV2K_valid_LR_bicubic/X4/0801x4.png").convert("RGB")
+        f"./.cache/data/DIV2K_valid_LR_bicubic/X4/08{sample_img + 1:02}x4.png").convert("RGB")
+
+    img.save("original.png", "PNG")
 
     new_width = img.size[0] * 4
     new_height = img.size[1] * 4

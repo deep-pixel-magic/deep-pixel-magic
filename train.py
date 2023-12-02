@@ -31,12 +31,25 @@ def random_crop(lr_img, hr_img, hr_crop_size=96, scale=4):
     return lr_img_cropped, hr_img_cropped
 
 
-def main():
-    out_dir = '.models/'
-    out_file = os.path.join(out_dir, 'model.weights')
+def random_flip(low_res_img, high_res_img):
+    rn = tf.random.uniform(shape=(), maxval=1)
+    return tf.cond(rn < 0.5,
+                   lambda: (low_res_img, high_res_img),
+                   lambda: (tf.image.flip_left_right(low_res_img),
+                            tf.image.flip_left_right(high_res_img)))
 
-    data_dir_low_res = "./.data/div2k/DIV2K_train_LR_bicubic/X4"
-    data_dir_high_res = "./.data/div2k/DIV2K_train_HR"
+
+def random_rotate(low_res_img, high_res_img):
+    rn = tf.random.uniform(shape=(), maxval=4, dtype=tf.int32)
+    return tf.image.rot90(low_res_img, rn), tf.image.rot90(high_res_img, rn)
+
+
+def main():
+    out_dir = './.cache/models/edsr/'
+    out_file = os.path.join(out_dir, 'model.pkg')
+
+    data_dir_low_res = "./.cache/data/DIV2K_train_LR_bicubic/X4"
+    data_dir_high_res = "./.cache/data/DIV2K_train_HR"
 
     image_files_low_res = sorted(tf.io.gfile.glob(data_dir_low_res + "/*.png"))
     image_files_high_res = sorted(tf.io.gfile.glob(
@@ -57,8 +70,15 @@ def main():
     data_set_training = tf.data.Dataset.zip(
         data_set_low_res, data_set_high_res)
 
+    # data_set_training.cache('./.cache/data/cached/dataset.cache')
+
     data_set_training = data_set_training.map(lambda lr, hr: random_crop(
         lr, hr, scale=4), num_parallel_calls=AUTOTUNE)
+
+    data_set_training = data_set_training.map(
+        lambda lr, hr: random_flip(lr, hr), num_parallel_calls=AUTOTUNE)
+    data_set_training = data_set_training.map(
+        lambda lr, hr: random_rotate(lr, hr), num_parallel_calls=AUTOTUNE)
 
     batch_size = 16
 
@@ -69,16 +89,12 @@ def main():
     data_set_training = data_set_training.repeat()
     data_set_training = data_set_training.prefetch(buffer_size=AUTOTUNE)
 
-    model = EdsrNetwork().build(scale=4, num_filters=32, num_residual_blocks=8)
+    model = EdsrNetwork().build(scale=4, num_filters=64, num_residual_blocks=16)
 
-    loss_function = MeanAbsoluteError()
-    learning_rate = PiecewiseConstantDecay(
-        boundaries=[50000], values=[1e-4, 5e-5])
+    trainer = EdsrTrainer(model=model, learning_rate=PiecewiseConstantDecay(
+        boundaries=[5000], values=[1e-4, 5e-5]))
 
-    trainer = EdsrTrainer(model=model, loss=loss_function,
-                          learning_rate=learning_rate)
-
-    trainer.train(data_set_training, epochs=100,
+    trainer.train(data_set_training, epochs=11,
                   steps=batched_data_set_cardinality)
 
     model.save_weights(out_file)

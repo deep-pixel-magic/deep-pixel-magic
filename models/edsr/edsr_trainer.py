@@ -1,6 +1,8 @@
 import numpy as np
 import tensorflow as tf
 
+from datetime import datetime
+
 from tensorflow.keras import optimizers
 from tensorflow.python.keras.models import Model
 from tensorflow.keras.applications.vgg19 import VGG19
@@ -12,7 +14,7 @@ from models.vgg.vgg import VggBuilder
 class EdsrTrainer:
     """A helper class for training an EDSR model."""
 
-    def __init__(self, model, loss, learning_rate=1e-4):
+    def __init__(self, model, learning_rate=1e-4):
         """Constructor.
 
         Args:
@@ -21,10 +23,11 @@ class EdsrTrainer:
             learning_rate: The learning rate.
         """
 
-        self.vgg = VggBuilder(vgg_output_layer=5).build(
+        self.vgg = VggBuilder(layer='block5_conv4').build(
             input_shape=(None, None, 3))
 
-        self.loss = loss
+        self.mean_absolute_error = tf.keras.losses.MeanAbsoluteError()
+        self.mean_squared_error = tf.keras.losses.MeanSquaredError()
 
         self.checkpoint = tf.train.Checkpoint(step=tf.Variable(0),
                                               psnr=tf.Variable(-1.0),
@@ -32,8 +35,11 @@ class EdsrTrainer:
                                                   learning_rate),
                                               model=model)
 
+        # now = datetime.now()
+        # formatted_date = now.strftime('%Y-%m-%d-%H-%M-%S')
+
         self.checkpoint_manager = tf.train.CheckpointManager(checkpoint=self.checkpoint,
-                                                             directory='./.checkpoints/edsr',
+                                                             directory='./.cache/checkpoints/edsr/',
                                                              max_to_keep=200)
 
         self.restore()
@@ -90,6 +96,10 @@ class EdsrTrainer:
             print(
                 f'model restored at step: {self.checkpoint.step.numpy()}.')
 
+    @property
+    def model(self):
+        return self.checkpoint.model
+
     def __train_step(self, low_res_img, high_res_img):
         """Performs a single training step.
 
@@ -106,7 +116,11 @@ class EdsrTrainer:
             high_res_img = tf.cast(high_res_img, tf.float32)
 
             prediction = self.checkpoint.model(low_res_img, training=True)
-            loss = self.__content_loss(high_res_img, prediction)
+
+            content_loss = self.__content_loss(high_res_img, prediction)
+            pixel_loss = self.__pixel_loss(high_res_img, prediction)
+
+            loss = content_loss * 0.99 + pixel_loss * 0.01
 
         variables = self.checkpoint.model.trainable_variables
 
@@ -135,7 +149,23 @@ class EdsrTrainer:
         high_res_features = self.vgg(high_res_img) / 12.75
         super_res_features = self.vgg(super_res_img) / 12.75
 
-        return self.loss(high_res_features, super_res_features)
+        loss = self.mean_squared_error(high_res_features, super_res_features)
+        return loss
+
+    @tf.function
+    def __pixel_loss(self, high_res_img, super_res_img):
+        """Calculates the pixel loss of the super resolution image.
+
+        Args:
+            high_res_img: The high resolution image.
+            super_res_img: The generated super resolution image.
+
+        Returns:
+            The pixel loss.
+        """
+
+        loss = self.mean_absolute_error(high_res_img, super_res_img)
+        return loss
 
     def __log(self, message, indent_level=0, end='\n', flush=False):
         """Prints the specified message to the console.

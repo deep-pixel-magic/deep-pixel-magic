@@ -4,11 +4,14 @@ __pycache__/
 # Ignore python virtual environment.
 .venv/
 
-# Ignore the data directory.
-.data/
+# Ignore the cache directory.
+.cache/
 
 # Ignore the checkpoint directory.
 .checkpoints/
+.checkpoints*
 
 # Ignore the models directory.
 .models/
+
+*.png
