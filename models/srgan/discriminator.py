@@ -2,13 +2,13 @@ from tensorflow.keras.models import Model
 from tensorflow.keras.layers import Add, BatchNormalization, Conv2D, Dense, Flatten, Input, LeakyReLU, Lambda
 
 
-class SrganDiscriminator:
+class SrganDiscriminatorNetwork:
     """Represents the SRGAN discriminator network."""
 
-    def __init__(self, resolution_in=96):
+    def __init__(self, img_res=96):
         """Constructor."""
 
-        self.resolution_in = resolution_in
+        self.img_res = img_res
 
     def build(self, num_filters=64):
         """Builds the discriminator network.
@@ -20,10 +20,10 @@ class SrganDiscriminator:
             The discriminator model.
         """
 
-        shape = (self.resolution_in, self.resolution_in, 3)
+        shape = (self.img_res, self.img_res, 3)
 
         x_in = Input(shape=shape)
-        x = Lambda(self.__normalize())(x_in)
+        x = Rescale(scale=1.0 / 127.5, offset=-1.0)(x_in)
 
         x = self.__discriminator_block(
             x, num_filters, batch_normalization=False)
@@ -67,11 +67,3 @@ class SrganDiscriminator:
             x = BatchNormalization(momentum=momentum)(x)
 
         return LeakyReLU(alpha=0.2)(x)
-
-    def __normalize(self):
-        """Normalizes the input.
-
-        Assumes an input interval of [0, 255].
-        """
-
-        return lambda x: x / 127.5 - 1

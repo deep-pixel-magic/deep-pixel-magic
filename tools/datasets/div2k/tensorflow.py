@@ -16,6 +16,11 @@ class TensorflowDataset:
 
         self.dataset = self.__load()
 
+    def batched(self, batch_size=16):
+        """Returns a batched version of the dataset."""
+
+        return self.dataset.batch(batch_size)
+
     def num(self):
         return self.dataset.cardinality().numpy()
 

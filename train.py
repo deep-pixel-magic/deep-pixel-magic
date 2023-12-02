@@ -10,10 +10,9 @@ from tensorflow.keras.losses import MeanSquaredError
 from tensorflow.keras.losses import MeanAbsoluteError
 
 from models.edsr.edsr import EdsrNetwork
-from models.edsr.edsr_trainer import EdsrTrainer
+from models.edsr.trainer import EdsrNetworkTrainer
 
-from tools.datasets.div2k.preprocessor import Preprocessor
-from tools.datasets.div2k.tensorflow import TensorflowDataset
+from tools.datasets.div2k.tensorflow import TensorflowDataset, TensorflowPreprocessor
 
 
 def main():
@@ -26,7 +25,7 @@ def main():
     batch_size = 16
 
     bundle = TensorflowDataset(data_dir_low_res, data_dir_high_res)
-    dataset = Preprocessor(bundle).preprocess(
+    dataset = TensorflowPreprocessor(bundle).preprocess(
         batch_size=batch_size, crop_size=96, scale=4)
 
     initial_data_set_cardinality = bundle.num()
@@ -34,7 +33,7 @@ def main():
 
     model = EdsrNetwork().build(scale=4, num_filters=64, num_residual_blocks=16)
 
-    trainer = EdsrTrainer(model=model, learning_rate=PiecewiseConstantDecay(
+    trainer = EdsrNetworkTrainer(model=model, learning_rate=PiecewiseConstantDecay(
         boundaries=[5000], values=[1e-4, 5e-5]))
 
     trainer.train(dataset, epochs=11,

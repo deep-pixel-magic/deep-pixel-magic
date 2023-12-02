@@ -11,7 +11,7 @@ from tensorflow.keras.applications.vgg19 import preprocess_input
 from models.vgg.vgg import VggBuilder
 
 
-class EdsrTrainer:
+class EdsrNetworkTrainer:
     """A helper class for training an EDSR model."""
 
     def __init__(self, model, learning_rate=1e-4):
@@ -96,10 +96,6 @@ class EdsrTrainer:
             print(
                 f'model restored at step: {self.checkpoint.step.numpy()}.')
 
-    @property
-    def model(self):
-        return self.checkpoint.model
-
     def __train_step(self, low_res_img, high_res_img):
         """Performs a single training step.
 
@@ -146,8 +142,8 @@ class EdsrTrainer:
         high_res_img = preprocess_input(high_res_img)
         super_res_img = preprocess_input(super_res_img)
 
-        high_res_features = self.vgg(high_res_img) / 12.75
-        super_res_features = self.vgg(super_res_img) / 12.75
+        high_res_features = self.vgg(high_res_img)
+        super_res_features = self.vgg(super_res_img)
 
         loss = self.mean_squared_error(high_res_features, super_res_features)
         return loss
