@@ -23,7 +23,7 @@ class SrganTrainer:
             learning_rate: The learning rate.
         """
 
-        self.vgg = VggBuilder(layer='block5_conv4').build(
+        self.vgg = VggBuilder(layers=['block5_conv4']).build(
             input_shape=(None, None, 3))
 
         self.mean_absolute_error = tf.keras.losses.MeanAbsoluteError()
@@ -117,7 +117,7 @@ class SrganTrainer:
 
         if self.generator_checkpoint_manager.latest_checkpoint:
             self.generator_checkpoint.restore(
-                self.checkpoint_manager.latest_checkpoint)
+                self.generator_checkpoint_manager.latest_checkpoint)
             print(
                 f'generator restored at step: {self.checkpoint.step.numpy()}.')
 

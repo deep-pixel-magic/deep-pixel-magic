@@ -21,6 +21,32 @@ class TensorflowDataset:
 
         return self.dataset.batch(batch_size)
 
+    def rgb_mean(self):
+        """Returns the mean of the RGB values of the images."""
+
+        sum_red = 0.0
+        sum_green = 0.0
+        sum_blue = 0.0
+
+        samples = 0
+
+        for _, hr_img in self.dataset:
+
+            image = tf.image.convert_image_dtype(hr_img, tf.float32)
+
+            sum_red += tf.reduce_sum(image[:, :, 0])
+            sum_green += tf.reduce_sum(image[:, :, 1])
+            sum_blue += tf.reduce_sum(image[:, :, 2])
+
+            samples += tf.cast(tf.shape(image)
+                               [0] * tf.shape(image)[1], tf.float32)
+
+        sum_red /= samples
+        sum_green /= samples
+        sum_blue /= samples
+
+        return sum_red.numpy(), sum_green.numpy(), sum_blue.numpy()
+
     def num(self):
         return self.dataset.cardinality().numpy()
 
@@ -134,3 +160,12 @@ class RandomRotateOperator:
     def __call__(self, low_res_img, high_res_img):
         rn = tf.random.uniform(shape=(), maxval=4, dtype=tf.int32)
         return tf.image.rot90(low_res_img, rn), tf.image.rot90(high_res_img, rn)
+
+
+class NormalizationOperator:
+
+    def __init__(self, mean):
+        self.mean = mean
+
+    def __call__(self, low_res_img, high_res_img):
+        return (low_res_img - self.mean) / 127.5, (high_res_img - self.mean) / 127.5

@@ -10,8 +10,10 @@ from tensorflow.keras.losses import MeanSquaredError
 from tensorflow.keras.losses import MeanAbsoluteError
 
 from models.srgan.srgan import SrganNetwork
-from models.srgan.discriminator import SrganDiscriminator
+from models.srgan.discriminator import SrganDiscriminatorNetwork
 from models.srgan.srgan_trainer import SrganTrainer
+
+from tools.datasets.div2k.tensorflow import TensorflowDataset, TensorflowPreprocessor
 
 
 def main():
@@ -30,17 +32,13 @@ def main():
     initial_data_set_cardinality = bundle.num()
     batched_data_set_cardinality = initial_data_set_cardinality // batch_size
 
-    data_set_training = data_set_training.batch(batch_size)
-    data_set_training = data_set_training.repeat()
-    data_set_training = data_set_training.prefetch(buffer_size=AUTOTUNE)
-
     generator = SrganNetwork().build()
-    discriminator = SrganDiscriminator().build()
+    discriminator = SrganDiscriminatorNetwork().build()
 
     trainer = SrganTrainer(generator=generator, discriminator=discriminator, learning_rate=PiecewiseConstantDecay(
         boundaries=[5000], values=[1e-4, 5e-5]))
 
-    trainer.train(data_set_training, epochs=11,
+    trainer.train(dataset, epochs=1,
                   steps=batched_data_set_cardinality)
 
     generator.save_weights(out_file)

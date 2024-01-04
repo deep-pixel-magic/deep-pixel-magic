@@ -34,7 +34,7 @@ def main():
     model = EdsrNetwork().build(scale=4, num_filters=64, num_residual_blocks=16)
 
     trainer = EdsrNetworkTrainer(model=model, learning_rate=PiecewiseConstantDecay(
-        boundaries=[5000], values=[1e-4, 5e-5]))
+        boundaries=[2400, 4000], values=[1e-4, 5e-5, 25e-6]))
 
     trainer.train(dataset, epochs=11,
                   steps=batched_data_set_cardinality)

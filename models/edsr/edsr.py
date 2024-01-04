@@ -18,6 +18,8 @@ class EdsrNetwork:
     def __init__(self):
         """Constructor."""
 
+        self.rgb_mean = np.array([0.4488, 0.4371, 0.4040]) * 255
+
     def build(self, scale, num_filters=64, num_residual_blocks=8, residual_block_scaling=None):
         """Builds the actual EDSR model.
 
@@ -31,9 +33,9 @@ class EdsrNetwork:
         shape = (None, None, 3)
 
         x_in = Input(shape=shape)
-        # layer_stack = Lambda(self.__normalize())(input_layer)
-        x = Rescaling(
-            scale=1.0 / 255.0, offset=0.0)(x_in)
+        x = Lambda(self.__normalize())(x_in)
+        # x = Rescaling(
+        #     scale=1.0 / 255.0, offset=0.0)(x_in)
 
         x = x_res = Conv2D(
             num_filters, 3, padding='same')(x)
@@ -49,8 +51,8 @@ class EdsrNetwork:
         x = self.__upsample_block(x, num_filters, scale)
         x = Conv2D(3, 3, padding='same')(x)
 
-        # layer_stack = Lambda(self.__denormalize())(layer_stack)
-        x = Rescaling(scale=255.0, offset=0.0)(x)
+        x = Lambda(self.__denormalize())(x)
+        # x = Rescaling(scale=255.0, offset=0.0)(x)
 
         return Model(x_in, x, name="edsr")
 
@@ -132,7 +134,7 @@ class EdsrNetwork:
         Assumes an input interval of [0, 255].
         """
 
-        return lambda x: x / 255.0
+        return lambda x: (x - self.rgb_mean) / 127.5
 
     def __denormalize(self):
         """Denormalizes the input.
@@ -140,4 +142,4 @@ class EdsrNetwork:
         Assumes a normalized input interval of [0, 1].
         """
 
-        return lambda x: x * 255
+        return lambda x: x * 127.5 + self.rgb_mean

@@ -1,7 +1,10 @@
+import numpy as np
 import tensorflow as tf
 
 from tensorflow.keras.models import Model
 from tensorflow.keras.layers import Add, BatchNormalization, Conv2D, Input, PReLU, Lambda
+
+from models.common.icnr import IcnrInitializer
 
 
 class SrganNetwork:
@@ -13,7 +16,7 @@ class SrganNetwork:
     def __init__(self):
         """Constructor."""
 
-        pass
+        self.rgb_mean = np.array([0.4488, 0.4371, 0.4040]) * 255
 
     def build(self, num_filters=64, num_residual_blocks=16):
         """Builds the actual SRGAN model.
@@ -79,7 +82,12 @@ class SrganNetwork:
             The upsample layer.
         """
 
-        x = Conv2D(num_filters, kernel_size=3, padding='same')(x_in)
+        kernel_initializer = IcnrInitializer(
+            tf.keras.initializers.GlorotUniform(), scale=4)
+
+        x = Conv2D(num_filters, kernel_size=3, padding='same',
+                   kernel_initializer=kernel_initializer)(x_in)
+
         x = Lambda(self.__pixel_shuffle(scale=2))(x)
         x = PReLU(shared_axes=[1, 2])(x)
 
@@ -103,7 +111,7 @@ class SrganNetwork:
         Assumes an input interval of [0, 255].
         """
 
-        return lambda x: x / 255.0
+        return lambda x: (x - self.rgb_mean) / 127.5
 
     def __denormalize(self):
         """Denormalizes the input.
@@ -111,4 +119,4 @@ class SrganNetwork:
         Assumes a normalized input interval of [0, 1].
         """
 
-        return lambda x: x * 255
+        return lambda x: x * 127.5 + self.rgb_mean

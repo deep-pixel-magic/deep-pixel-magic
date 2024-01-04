@@ -8,14 +8,14 @@ class VggBuilder:
     The pretrained VGG model can be used for style transfer or perceptual loss.
     """
 
-    def __init__(self, layer):
+    def __init__(self, layers):
         """Constructor.
 
         Args:
             layer: The output layer of the pretrained VGG19 network to use.
         """
 
-        self.layer = layer
+        self.layers = layers
 
     def build(self, input_shape):
         """Creates an instance of the pretrained keraas VGG model.
@@ -31,5 +31,7 @@ class VggBuilder:
                     input_shape=input_shape)
         vgg.trainable = False
 
-        model = Model(vgg.input, vgg.get_layer(self.layer).output)
+        outputs = [vgg.get_layer(layer).output for layer in self.layers]
+
+        model = Model(vgg.input, outputs)
         return model

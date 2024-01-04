@@ -1,5 +1,6 @@
 import numpy as np
 import tensorflow as tf
+import tensorflow.keras.backend as K
 
 from datetime import datetime
 
@@ -23,7 +24,7 @@ class EdsrNetworkTrainer:
             learning_rate: The learning rate.
         """
 
-        self.vgg = VggBuilder(layer='block5_conv4').build(
+        self.vgg = VggBuilder(layers=['block5_conv4']).build(
             input_shape=(None, None, 3))
 
         self.mean_absolute_error = tf.keras.losses.MeanAbsoluteError()
@@ -34,9 +35,6 @@ class EdsrNetworkTrainer:
                                               optimizer=optimizers.Adam(
                                                   learning_rate),
                                               model=model)
-
-        # now = datetime.now()
-        # formatted_date = now.strftime('%Y-%m-%d-%H-%M-%S')
 
         self.checkpoint_manager = tf.train.CheckpointManager(checkpoint=self.checkpoint,
                                                              directory='./.cache/checkpoints/edsr/',
@@ -62,18 +60,21 @@ class EdsrNetworkTrainer:
         epochs_to_run = epochs - performed_epochs
 
         if performed_steps > 0:
-            self.__log(f'resuming from epoch: {performed_epochs + 1}/{epochs}')
+            self.__log(f'epochs completed: {performed_epochs}/{epochs}')
             self.__log(f'epochs to run: {epochs_to_run}')
 
         for _ in range(epochs_to_run):
+
             current_epoch = checkpoint.step.numpy() // steps
             performed_steps = steps * current_epoch
 
             self.__log(f'epoch: {current_epoch + 1}/{epochs}')
 
             for low_res_img, high_res_img in dataset.take(steps):
+
                 current_step = checkpoint.step.numpy()
-                current_loss = self.__train_step(low_res_img, high_res_img)
+                current_loss, current_psnr = self.__train_step(
+                    low_res_img, high_res_img)
 
                 if not np.any(performed_steps):
                     current_step_in_set = current_step + 1
@@ -81,7 +82,7 @@ class EdsrNetworkTrainer:
                     current_step_in_set = current_step % performed_steps + 1
 
                 self.__log(
-                    f'step: {current_step_in_set}/{steps}, completed: {current_step_in_set / steps * 100:.0f}%, loss: {current_loss.numpy():.2f}', indent_level=1, end='\n', flush=True)
+                    f'step: {current_step_in_set}/{steps}, completed: {current_step_in_set / steps * 100:.0f}%, loss: {current_loss.numpy():.2f}, psnr: {current_psnr.numpy().sum():.2f}', indent_level=1, end='\n', flush=True)
 
                 checkpoint.step.assign_add(1)
 
@@ -92,6 +93,7 @@ class EdsrNetworkTrainer:
         """Restores the latest checkpoint if it exists."""
 
         if self.checkpoint_manager.latest_checkpoint:
+
             self.checkpoint.restore(self.checkpoint_manager.latest_checkpoint)
             print(
                 f'model restored at step: {self.checkpoint.step.numpy()}.')
@@ -108,15 +110,17 @@ class EdsrNetworkTrainer:
         """
 
         with tf.GradientTape() as tape:
+
             low_res_img = tf.cast(low_res_img, tf.float32)
             high_res_img = tf.cast(high_res_img, tf.float32)
 
-            prediction = self.checkpoint.model(low_res_img, training=True)
+            super_res_img = self.checkpoint.model(low_res_img, training=True)
 
-            content_loss = self.__content_loss(high_res_img, prediction)
-            pixel_loss = self.__pixel_loss(high_res_img, prediction)
+            content_loss = self.__content_loss(high_res_img, super_res_img)
+            pixel_loss = self.__pixel_loss(high_res_img, super_res_img)
 
-            loss = content_loss * 0.8 + pixel_loss * 0.2
+            loss = content_loss * 0.99 + pixel_loss * 0.01
+            psnr = tf.image.psnr(high_res_img, super_res_img, max_val=255)[0]
 
         variables = self.checkpoint.model.trainable_variables
 
@@ -125,7 +129,7 @@ class EdsrNetworkTrainer:
 
         self.checkpoint.optimizer.apply_gradients(mapped_gradients)
 
-        return loss
+        return loss, psnr
 
     @tf.function
     def __content_loss(self, high_res_img, super_res_img):
@@ -142,11 +146,29 @@ class EdsrNetworkTrainer:
         high_res_img = preprocess_input(high_res_img)
         super_res_img = preprocess_input(super_res_img)
 
-        high_res_features = self.vgg(high_res_img)
-        super_res_features = self.vgg(super_res_img)
+        high_res_features = self.vgg(high_res_img) / 12.75
+        super_res_features = self.vgg(super_res_img) / 12.75
 
         loss = self.mean_squared_error(high_res_features, super_res_features)
         return loss
+
+    @tf.function
+    def __perceptual_loss(self, high_res_img, super_res_img):
+        selected_layer_weights = [1.0, 4.0, 4.0, 8.0, 16.0]
+
+        h1_list = self.vgg(high_res_img)
+        h2_list = self.vgg(super_res_img)
+
+        loss = 0.0
+
+        for h1, h2, weight in zip(h1_list, h2_list, selected_layer_weights):
+            h1 = K.flatten(h1)
+            h2 = K.flatten(h2)
+
+            loss = loss + weight * \
+                K.sum(K.square(h1 - h2), axis=-1, keepdims=False)
+
+        return loss / 1000000000.0
 
     @tf.function
     def __pixel_loss(self, high_res_img, super_res_img):
