@@ -95,19 +95,24 @@ class EdsrNetwork:
         return x_in
 
     def __upsample_deconvolution(self, x_in, num_filters, factor):
-        """Creates a single upsampling instance.
+        """Creates a single upsampling layer using transposed convolution.
 
-        An upsampling instance consists of a convolutional layer and a pixel shuffle layer.
+        Notes:
+            - We use the ICNR initializer to reduce checkerboard artifacts.
+            - We prevent checkerboard artifacts by using a kernel size that is divisible by the stride. By doing this we prevent pixel overlap.
 
         Args:
             x: The input layer.
             factor: The upsampling factor.
         """
 
-        kernel_initializer = IcnrInitializer(GlorotUniform(), scale=factor)
+        kernel_initializer = IcnrInitializer(
+            GlorotUniform(),
+            scale=factor)
+
         x_in = Conv2DTranspose(
             filters=num_filters * (factor ** 2),
-            kernel_size=3,
+            kernel_size=factor * 2,
             strides=(factor, factor),
             kernel_initializer=kernel_initializer,
             padding='same')(x_in)

@@ -31,12 +31,13 @@ def main():
     initial_data_set_cardinality = bundle.num()
     batched_data_set_cardinality = initial_data_set_cardinality // batch_size
 
-    model = EdsrNetwork().build(scale=4, num_filters=64, num_residual_blocks=16)
+    model = EdsrNetwork().build(scale=4, num_filters=64,
+                                num_residual_blocks=16, residual_block_scaling=0.1)
 
     trainer = EdsrNetworkTrainer(model=model, learning_rate=PiecewiseConstantDecay(
-        boundaries=[2000, 3000, 4000, 4500], values=[1e-4, 5e-5, 2.5e-5, 1.25e-5, 0.625e-5]))
+        boundaries=[2000, 3000, 4000], values=[1e-4, 5e-5, 2.5e-5, 1.25e-5]))
 
-    trainer.train(dataset, epochs=100,
+    trainer.train(dataset, epochs=80,
                   steps=batched_data_set_cardinality)
 
     model.save_weights(out_file)

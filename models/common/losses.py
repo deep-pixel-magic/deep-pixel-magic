@@ -56,7 +56,7 @@ def compute_perceptual_loss(high_res_features, super_res_features):
 
 
 @tf.function
-def compute_perceptual_loss_euclidean(high_res_features, super_res_features):
+def compute_euclidean_distance(high_res_features, super_res_features):
     """Calculates the perceptual loss of the super resolution image.
 
     Args:
@@ -71,7 +71,8 @@ def compute_perceptual_loss_euclidean(high_res_features, super_res_features):
     vgg_layers_weights = [0.1, 0.1, 1, 1, 1]
 
     for hr_features, sr_features, weight in zip(high_res_features, super_res_features, vgg_layers_weights):
-        loss += K.mean(K.square(hr_features - sr_features)) * weight
+        loss += K.sqrt(K.sum(K.square(sr_features -
+                       hr_features), axis=-1)) * weight
 
     return loss
 

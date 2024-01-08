@@ -83,10 +83,16 @@ class SrganNetwork:
         """
 
         kernel_initializer = IcnrInitializer(
-            tf.keras.initializers.GlorotUniform(), scale=2)
+            tf.keras.initializers.GlorotUniform(),
+            scale=2)
 
-        x = Conv2DTranspose(num_filters, kernel_size=3, strides=(2, 2), padding='same',
-                            kernel_initializer=kernel_initializer)(x_in)
+        x = Conv2DTranspose(
+            num_filters,
+            kernel_size=4,
+            strides=(2, 2),
+            padding='same',
+            kernel_initializer=kernel_initializer)(x_in)
+
         x = PReLU(shared_axes=[1, 2])(x)
 
         return x
