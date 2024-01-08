@@ -93,6 +93,7 @@ class TensorflowPreprocessor:
     def preprocess(self, batch_size=16, crop_size=96, scale=4):
         """Preprocesses the images."""
 
+        num = self.dataset.num()
         dataset = self.dataset.dataset
 
         crop_operator = RandomCropOperator(crop_size, scale)
@@ -103,6 +104,7 @@ class TensorflowPreprocessor:
         dataset = dataset.map(flip_operator, num_parallel_calls=AUTOTUNE)
         dataset = dataset.map(rotate_operator, num_parallel_calls=AUTOTUNE)
 
+        dataset = dataset.shuffle(buffer_size=num)
         dataset = dataset.batch(batch_size)
         dataset = dataset.repeat()
         dataset = dataset.prefetch(buffer_size=AUTOTUNE)

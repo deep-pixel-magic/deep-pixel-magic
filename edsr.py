@@ -9,8 +9,8 @@ from tensorflow.python.data.experimental import AUTOTUNE
 from tensorflow.keras.losses import MeanSquaredError
 from tensorflow.keras.losses import MeanAbsoluteError
 
-from models.edsr.edsr import EdsrNetwork
-from models.edsr.trainer import EdsrNetworkTrainer
+from models.edsr.edsr_network import EdsrNetwork
+from models.edsr.edsr_trainer import EdsrNetworkTrainer
 
 from tools.datasets.div2k.tensorflow import TensorflowDataset, TensorflowPreprocessor
 
@@ -26,7 +26,7 @@ def main():
 
     bundle = TensorflowDataset(data_dir_low_res, data_dir_high_res)
     dataset = TensorflowPreprocessor(bundle).preprocess(
-        batch_size=batch_size, crop_size=96, scale=4)
+        batch_size=batch_size, crop_size=128, scale=4)
 
     initial_data_set_cardinality = bundle.num()
     batched_data_set_cardinality = initial_data_set_cardinality // batch_size
@@ -34,9 +34,9 @@ def main():
     model = EdsrNetwork().build(scale=4, num_filters=64, num_residual_blocks=16)
 
     trainer = EdsrNetworkTrainer(model=model, learning_rate=PiecewiseConstantDecay(
-        boundaries=[2400, 4000], values=[1e-4, 5e-5, 25e-6]))
+        boundaries=[2000, 3000, 4000, 4500], values=[1e-4, 5e-5, 2.5e-5, 1.25e-5, 0.625e-5]))
 
-    trainer.train(dataset, epochs=11,
+    trainer.train(dataset, epochs=100,
                   steps=batched_data_set_cardinality)
 
     model.save_weights(out_file)

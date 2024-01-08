@@ -3,10 +3,10 @@ import numpy as np
 import tensorflow as tf
 
 from tensorflow.keras.models import Model
-from tensorflow.keras.layers import Add, Conv2D, Input, PReLU, Lambda, Conv2DTranspose, Rescaling
+from tensorflow.keras.layers import Add, Conv2D, Input, Lambda, Conv2DTranspose
 from tensorflow.keras.initializers import GlorotUniform
 
-from models.common.icnr import IcnrInitializer
+from models.common.kernels import IcnrInitializer
 
 
 class EdsrNetwork:
@@ -34,8 +34,6 @@ class EdsrNetwork:
 
         x_in = Input(shape=shape)
         x = Lambda(self.__normalize())(x_in)
-        # x = Rescaling(
-        #     scale=1.0 / 255.0, offset=0.0)(x_in)
 
         x = x_res = Conv2D(
             num_filters, 3, padding='same')(x)
@@ -46,13 +44,13 @@ class EdsrNetwork:
 
         x_res = Conv2D(
             num_filters, 3, padding='same')(x_res)
+
         x = Add()([x, x_res])
 
         x = self.__upsample_block(x, num_filters, scale)
         x = Conv2D(3, 3, padding='same')(x)
 
         x = Lambda(self.__denormalize())(x)
-        # x = Rescaling(scale=255.0, offset=0.0)(x)
 
         return Model(x_in, x, name="edsr")
 
@@ -92,11 +90,11 @@ class EdsrNetwork:
         upsample_instances = int(math.log2(scale))
 
         for _ in range(upsample_instances):
-            x_in = self.__upsample_instance(x_in, num_filters, 2)
+            x_in = self.__upsample_deconvolution(x_in, num_filters, 2)
 
         return x_in
 
-    def __upsample_instance(self, x_in, num_filters, factor):
+    def __upsample_deconvolution(self, x_in, num_filters, factor):
         """Creates a single upsampling instance.
 
         An upsampling instance consists of a convolutional layer and a pixel shuffle layer.
@@ -106,13 +104,29 @@ class EdsrNetwork:
             factor: The upsampling factor.
         """
 
-        kernel_initializer = IcnrInitializer(
-            tf.keras.initializers.GlorotUniform(), scale=factor)
-
+        kernel_initializer = IcnrInitializer(GlorotUniform(), scale=factor)
         x_in = Conv2DTranspose(
             filters=num_filters * (factor ** 2),
             kernel_size=3,
+            strides=(factor, factor),
             kernel_initializer=kernel_initializer,
+            padding='same')(x_in)
+
+        return x_in
+
+    def __upsample_pixel_shuffle(self, x_in, num_filters, factor):
+        """Creates a single upsampling instance.
+
+        An upsampling instance consists of a convolutional layer and a pixel shuffle layer.
+
+        Args:
+            x: The input layer.
+            factor: The upsampling factor.
+        """
+
+        x_in = Conv2D(
+            filters=num_filters * (factor ** 2),
+            kernel_size=3,
             padding='same')(x_in)
 
         x_in = Lambda(self.__pixel_shuffle(scale=factor))(x_in)

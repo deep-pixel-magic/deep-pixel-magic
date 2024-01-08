@@ -1,41 +1,39 @@
-import os
 import sys
 import tensorflow as tf
 import matplotlib.pyplot as plt
 from PIL import Image
 
-from tensorflow.keras import optimizers
-from tensorflow.keras.optimizers.schedules import PiecewiseConstantDecay
-from tensorflow.python.data.experimental import AUTOTUNE
-from tensorflow.keras.losses import MeanSquaredError
-from tensorflow.keras.losses import MeanAbsoluteError
-
-from models.edsr.edsr import EdsrNetwork
+from models.edsr.edsr_network import EdsrNetwork
 
 from tools.datasets.div2k import div2k
 from tools.datasets.div2k.tensorflow import TensorflowDataset, TensorflowPreprocessor
 from tools.datasets.div2k.image import Div2kImage
+
+from tools.images.image import load_png
 
 
 def main():
     data_dir_low_res = "./.cache/data/DIV2K_valid_LR_bicubic/X4"
     data_dir_high_res = "./.cache/data/DIV2K_valid_HR"
 
-    dataset = TensorflowDataset(data_dir_low_res, data_dir_high_res).batched(1)
+    # dataset = TensorflowDataset(data_dir_low_res, data_dir_high_res).batched(1)
 
-    iterator_training = dataset.as_numpy_iterator()
-    element = iterator_training.next()
-    element = iterator_training.next()
-    element = iterator_training.next()
-    element = iterator_training.next()
-    element = iterator_training.next()
+    # iterator_training = dataset.as_numpy_iterator()
+    # element = iterator_training.next()
+    # element = iterator_training.next()
+    # element = iterator_training.next()
+    # element = iterator_training.next()
+    # element = iterator_training.next()
+
+    img_lr = load_png('./.cache/data/DIV2K_valid_LR_bicubic/X4/0805x4.png')
+    img_hr = load_png('./.cache/data/DIV2K_valid_HR/0805.png')
 
     model = EdsrNetwork().build(scale=4, num_filters=64, num_residual_blocks=16)
 
     latest = tf.train.latest_checkpoint('./.cache/models/edsr')
     model.load_weights(latest)
 
-    prediction = model.predict(element[0])
+    prediction = model.predict(img_lr)
 
     predicted_img = prediction[0]
     predicted_img = tf.round(predicted_img)
@@ -58,7 +56,7 @@ def main():
     plots[1].imshow(predicted_img)
     plots[1].title.set_text('Prediction')
 
-    plots[2].imshow(tf.squeeze(element[1]))
+    plots[2].imshow(tf.squeeze(img_hr))
     plots[2].title.set_text('Original')
 
     plt.show()

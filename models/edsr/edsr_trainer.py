@@ -1,8 +1,8 @@
+import os
+import csv
+
 import numpy as np
 import tensorflow as tf
-import tensorflow.keras.backend as K
-
-from datetime import datetime
 
 from tensorflow.keras import optimizers
 from tensorflow.python.keras.models import Model
@@ -10,6 +10,8 @@ from tensorflow.keras.applications.vgg19 import VGG19
 from tensorflow.keras.applications.vgg19 import preprocess_input
 
 from models.vgg.vgg import VggBuilder
+from models.common.metrics import compute_psnr, compute_ssim
+from models.common.losses import compute_pixel_loss
 
 
 class EdsrNetworkTrainer:
@@ -24,7 +26,7 @@ class EdsrNetworkTrainer:
             learning_rate: The learning rate.
         """
 
-        self.vgg = VggBuilder(layers=['block5_conv4']).build(
+        self.vgg = VggBuilder(layers=['block1_conv2', 'block2_conv2', 'block3_conv4', 'block4_conv4', 'block5_conv4']).build(
             input_shape=(None, None, 3))
 
         self.mean_absolute_error = tf.keras.losses.MeanAbsoluteError()
@@ -63,31 +65,42 @@ class EdsrNetworkTrainer:
             self.__log(f'epochs completed: {performed_epochs}/{epochs}')
             self.__log(f'epochs to run: {epochs_to_run}')
 
-        for _ in range(epochs_to_run):
+        csv_file = './.cache/logs/edsr.csv'
+        os.makedirs(os.path.dirname(csv_file), exist_ok=True)
 
-            current_epoch = checkpoint.step.numpy() // steps
-            performed_steps = steps * current_epoch
+        with open(csv_file, 'a') as log_file:
+            log_writer = csv.writer(log_file, delimiter=',')
+            log_writer.writerow(['epoch', 'step', 'loss', 'psnr', 'ssim'])
 
-            self.__log(f'epoch: {current_epoch + 1}/{epochs}')
+            for _ in range(epochs_to_run):
 
-            for low_res_img, high_res_img in dataset.take(steps):
+                current_epoch = checkpoint.step.numpy() // steps
+                performed_steps = steps * current_epoch
 
-                current_step = checkpoint.step.numpy()
-                current_loss, current_psnr = self.__train_step(
-                    low_res_img, high_res_img)
+                self.__log(f'epoch: {current_epoch + 1}/{epochs}')
 
-                if not np.any(performed_steps):
-                    current_step_in_set = current_step + 1
-                else:
-                    current_step_in_set = current_step % performed_steps + 1
+                for low_res_img, high_res_img in dataset.take(steps):
 
-                self.__log(
-                    f'step: {current_step_in_set}/{steps}, completed: {current_step_in_set / steps * 100:.0f}%, loss: {current_loss.numpy():.2f}, psnr: {current_psnr.numpy().sum():.2f}', indent_level=1, end='\n', flush=True)
+                    current_step = checkpoint.step.numpy()
+                    current_loss, current_psnr, current_ssim = self.__train_step(
+                        low_res_img, high_res_img)
 
-                checkpoint.step.assign_add(1)
+                    if not np.any(performed_steps):
+                        current_step_in_set = current_step + 1
+                    else:
+                        current_step_in_set = current_step % performed_steps + 1
 
-            checkpoint_manager.save()
-            self.__log('')
+                    log_writer.writerow(
+                        [current_epoch, checkpoint.step.numpy() + 1, current_loss.numpy(), current_psnr.numpy(), current_ssim.numpy()])
+                    log_file.flush()
+
+                    self.__log(
+                        f'step: {current_step_in_set}/{steps}, completed: {current_step_in_set / steps * 100:.0f}%, loss: {current_loss.numpy():.2f}, psnr: {current_psnr.numpy():.2f}, ssim: {current_ssim.numpy():.2f}', indent_level=1, end='\n', flush=True)
+
+                    checkpoint.step.assign_add(1)
+
+                checkpoint_manager.save()
+                self.__log('')
 
     def restore(self):
         """Restores the latest checkpoint if it exists."""
@@ -116,11 +129,14 @@ class EdsrNetworkTrainer:
 
             super_res_img = self.checkpoint.model(low_res_img, training=True)
 
-            content_loss = self.__content_loss(high_res_img, super_res_img)
-            pixel_loss = self.__pixel_loss(high_res_img, super_res_img)
+            # perceptual_loss = self.__content_loss(high_res_img, super_res_img)
+            pixel_loss = compute_pixel_loss(high_res_img, super_res_img)
 
-            loss = content_loss * 0.99 + pixel_loss * 0.01
-            psnr = tf.image.psnr(high_res_img, super_res_img, max_val=255)[0]
+            # loss = perceptual_loss + pixel_loss
+            loss = pixel_loss
+
+            psnr = compute_psnr(high_res_img, super_res_img)
+            ssim = compute_ssim(high_res_img, super_res_img)
 
         variables = self.checkpoint.model.trainable_variables
 
@@ -129,61 +145,7 @@ class EdsrNetworkTrainer:
 
         self.checkpoint.optimizer.apply_gradients(mapped_gradients)
 
-        return loss, psnr
-
-    @tf.function
-    def __content_loss(self, high_res_img, super_res_img):
-        """Calculates the content loss of the super resolution image using the keras VGG model.
-
-        Args:
-            high_res_img: The high resolution image.
-            super_res_img: The generated super resolution image.
-
-        Returns:
-            The content loss.
-        """
-
-        high_res_img = preprocess_input(high_res_img)
-        super_res_img = preprocess_input(super_res_img)
-
-        high_res_features = self.vgg(high_res_img) / 12.75
-        super_res_features = self.vgg(super_res_img) / 12.75
-
-        loss = self.mean_squared_error(high_res_features, super_res_features)
-        return loss
-
-    @tf.function
-    def __perceptual_loss(self, high_res_img, super_res_img):
-        selected_layer_weights = [1.0, 4.0, 4.0, 8.0, 16.0]
-
-        h1_list = self.vgg(high_res_img)
-        h2_list = self.vgg(super_res_img)
-
-        loss = 0.0
-
-        for h1, h2, weight in zip(h1_list, h2_list, selected_layer_weights):
-            h1 = K.flatten(h1)
-            h2 = K.flatten(h2)
-
-            loss = loss + weight * \
-                K.sum(K.square(h1 - h2), axis=-1, keepdims=False)
-
-        return loss / 1000000000.0
-
-    @tf.function
-    def __pixel_loss(self, high_res_img, super_res_img):
-        """Calculates the pixel loss of the super resolution image.
-
-        Args:
-            high_res_img: The high resolution image.
-            super_res_img: The generated super resolution image.
-
-        Returns:
-            The pixel loss.
-        """
-
-        loss = self.mean_absolute_error(high_res_img, super_res_img)
-        return loss
+        return loss, psnr, ssim
 
     def __log(self, message, indent_level=0, end='\n', flush=False):
         """Prints the specified message to the console.

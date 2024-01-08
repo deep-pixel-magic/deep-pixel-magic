@@ -4,14 +4,14 @@ import tensorflow as tf
 from tensorflow.keras import optimizers
 
 from models.vgg.vgg import VggBuilder
-from models.common.losses import compute_content_loss, compute_generator_loss, compute_discriminator_loss
+from models.common.losses import compute_content_loss, compute_pixel_loss, compute_discriminator_loss
 from models.common.metrics import compute_psnr, compute_ssim
 
 
-class SrganTrainer:
+class SrganPreTrainer:
     """A helper class for training an SRGAN model."""
 
-    def __init__(self, generator, discriminator, learning_rate=1e-4):
+    def __init__(self, generator, learning_rate=1e-4):
         """Constructor.
 
         Args:
@@ -20,17 +20,11 @@ class SrganTrainer:
             learning_rate: The learning rate.
         """
 
-        self.vgg = VggBuilder(layers=['block1_conv2', 'block2_conv2', 'block3_conv4', 'block4_conv4', 'block5_conv4']).build(
-            input_shape=(None, None, 3))
-
         self.generator_optimizer = optimizers.Adam(learning_rate)
-        self.discriminator_optimizer = optimizers.Adam(learning_rate)
 
         self.checkpoint = tf.train.Checkpoint(step=tf.Variable(0),
                                               generator=generator,
-                                              discriminator=discriminator,
-                                              generator_optimizer=self.generator_optimizer,
-                                              discriminator_optimizer=self.discriminator_optimizer)
+                                              generator_optimizer=self.generator_optimizer)
 
         self.checkpoint_manager = tf.train.CheckpointManager(checkpoint=self.checkpoint,
                                                              directory='./.cache/checkpoints/srgan',
@@ -68,7 +62,7 @@ class SrganTrainer:
             for low_res_img, high_res_img in dataset.take(steps):
                 current_step = checkpoint.step.numpy()
 
-                loss, perc_loss, gen_loss, disc_loss, psnr, ssim = self.__train_step(
+                loss, psnr, ssim = self.__train_step(
                     low_res_img, high_res_img)
 
                 if not np.any(performed_steps):
@@ -77,7 +71,7 @@ class SrganTrainer:
                     current_step_in_set = current_step % performed_steps + 1
 
                 self.__log(
-                    f'step: {current_step_in_set}/{steps}, completed: {current_step_in_set / steps * 100:.0f}%, loss: {loss.numpy():.2f}, perceptual loss: {perc_loss.numpy():.2f}, generator loss: {gen_loss.numpy():.2f}, discriminator loss {disc_loss.numpy():.2f}, psnr: {psnr.numpy():.2f}, ssim: {ssim.numpy():.2f}', indent_level=1, end='\n', flush=True)
+                    f'step: {current_step_in_set}/{steps}, completed: {current_step_in_set / steps * 100:.0f}%, loss: {loss.numpy():.2f}, psnr: {psnr.numpy():.2f}, ssim: {ssim.numpy():.2f}', indent_level=1, end='\n', flush=True)
 
                 checkpoint.step.assign_add(1)
 
@@ -105,47 +99,30 @@ class SrganTrainer:
             The loss.
         """
 
-        with tf.GradientTape() as generator_tape, tf.GradientTape() as discriminator_tape:
+        with tf.GradientTape() as generator_tape:
             low_res_img = tf.cast(low_res_img, tf.float32)
             high_res_img = tf.cast(high_res_img, tf.float32)
 
             super_res_img = self.checkpoint.generator(
                 low_res_img, training=True)
 
-            disc_out_hr = self.checkpoint.discriminator(
-                high_res_img, training=True)
-            disc_out_sr = self.checkpoint.discriminator(
-                super_res_img, training=True)
-
-            gen_loss = compute_generator_loss(disc_out_sr)
-            disc_loss = compute_discriminator_loss(disc_out_hr, disc_out_sr)
-
-            perc_loss = compute_content_loss(
-                high_res_img, super_res_img, self.vgg)
-            loss = perc_loss + gen_loss
+            loss = compute_pixel_loss(high_res_img, super_res_img)
 
             psnr = compute_psnr(high_res_img, super_res_img)
             ssim = compute_ssim(high_res_img, super_res_img)
 
         generator_variables = self.checkpoint.generator.trainable_variables
-        discriminator_variables = self.checkpoint.discriminator.trainable_variables
 
         generator_gradients = generator_tape.gradient(
             loss, generator_variables)
-        discriminator_gradients = discriminator_tape.gradient(
-            disc_loss, discriminator_variables)
 
         generator_mapped_gradients = zip(
             generator_gradients, generator_variables)
-        discriminator_mapped_gradients = zip(
-            discriminator_gradients, discriminator_variables)
 
         self.checkpoint.generator_optimizer.apply_gradients(
             generator_mapped_gradients)
-        self.checkpoint.discriminator_optimizer.apply_gradients(
-            discriminator_mapped_gradients)
 
-        return loss, perc_loss, gen_loss, disc_loss, psnr, ssim
+        return loss, psnr, ssim
 
     def __log(self, message, indent_level=0, end='\n', flush=False):
         """Prints the specified message to the console.

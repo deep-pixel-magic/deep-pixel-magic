@@ -2,9 +2,9 @@ import numpy as np
 import tensorflow as tf
 
 from tensorflow.keras.models import Model
-from tensorflow.keras.layers import Add, BatchNormalization, Conv2D, Input, PReLU, Lambda
+from tensorflow.keras.layers import Add, BatchNormalization, Conv2D, Conv2DTranspose, Input, PReLU, Lambda
 
-from models.common.icnr import IcnrInitializer
+from models.common.kernels import IcnrInitializer
 
 
 class SrganNetwork:
@@ -32,17 +32,17 @@ class SrganNetwork:
         x = Lambda(self.__normalize())(x_in)
 
         x = Conv2D(num_filters, kernel_size=9, padding='same')(x)
-        x = x_1 = PReLU(shared_axes=[1, 2])(x)
+        x = x_pre_res = PReLU(shared_axes=[1, 2])(x)
 
         for _ in range(num_residual_blocks):
             x = self.__residual_block(x, num_filters)
 
         x = Conv2D(num_filters, kernel_size=3, padding='same')(x)
         x = BatchNormalization()(x)
-        x = Add()([x_1, x])
+        x = Add()([x_pre_res, x])
 
-        x = self.__upsample(x, num_filters * 4)
-        x = self.__upsample(x, num_filters * 4)
+        x = self.__upsample_deconvolution(x, num_filters * 4)
+        x = self.__upsample_deconvolution(x, num_filters * 4)
 
         x = Conv2D(3, kernel_size=9, padding='same', activation='tanh')(x)
         x = Lambda(self.__denormalize())(x)
@@ -71,7 +71,7 @@ class SrganNetwork:
 
         return x
 
-    def __upsample(self, x_in, num_filters):
+    def __upsample_deconvolution(self, x_in, num_filters):
         """Upsamples the input using sub-pixel convolution.
 
         Args:
@@ -83,11 +83,26 @@ class SrganNetwork:
         """
 
         kernel_initializer = IcnrInitializer(
-            tf.keras.initializers.GlorotUniform(), scale=4)
+            tf.keras.initializers.GlorotUniform(), scale=2)
 
-        x = Conv2D(num_filters, kernel_size=3, padding='same',
-                   kernel_initializer=kernel_initializer)(x_in)
+        x = Conv2DTranspose(num_filters, kernel_size=3, strides=(2, 2), padding='same',
+                            kernel_initializer=kernel_initializer)(x_in)
+        x = PReLU(shared_axes=[1, 2])(x)
 
+        return x
+
+    def __upsample_pixel_shuffle(self, x_in, num_filters):
+        """Upsamples the input using sub-pixel convolution.
+
+        Args:
+            x_in: The input layer.
+            num_filters: The number of filters.
+
+        Returns:
+            The upsample layer.
+        """
+
+        x = Conv2D(num_filters, kernel_size=3, padding='same')(x_in)
         x = Lambda(self.__pixel_shuffle(scale=2))(x)
         x = PReLU(shared_axes=[1, 2])(x)
 

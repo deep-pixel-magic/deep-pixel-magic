@@ -33,5 +33,7 @@ class VggBuilder:
 
         outputs = [vgg.get_layer(layer).output for layer in self.layers]
 
-        model = Model(vgg.input, outputs)
+        model = Model([vgg.input], outputs)
+        model.trainable = False
+
         return model

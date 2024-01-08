@@ -5,7 +5,7 @@ from tensorflow.keras.layers import Add, BatchNormalization, Conv2D, Dense, Flat
 class SrganDiscriminatorNetwork:
     """Represents the SRGAN discriminator network."""
 
-    def __init__(self, img_res=96):
+    def __init__(self, img_res=128):
         """Constructor."""
 
         self.img_res = img_res
