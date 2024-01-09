@@ -10,7 +10,7 @@ compute_binary_cross_entropy = tf.keras.losses.BinaryCrossentropy(
 
 
 @tf.function
-def compute_content_loss(high_res_img, super_res_img, vgg_model):
+def compute_content_loss(high_res_img, super_res_img, vgg_model, vgg_layer_weights):
     """Calculates the content loss of the super resolution image using the keras VGG model.
 
     Args:
@@ -30,11 +30,11 @@ def compute_content_loss(high_res_img, super_res_img, vgg_model):
     high_res_features = vgg_model(high_res_img_pp)
     super_res_features = vgg_model(super_res_img_pp)
 
-    return compute_perceptual_loss(high_res_features, super_res_features)
+    return compute_perceptual_loss(high_res_features, super_res_features, vgg_layer_weights)
 
 
 @tf.function
-def compute_perceptual_loss(high_res_features, super_res_features):
+def compute_perceptual_loss(high_res_features, super_res_features, vgg_layer_weights):
     """Calculates the perceptual loss of the super resolution image.
 
     Args:
@@ -46,11 +46,11 @@ def compute_perceptual_loss(high_res_features, super_res_features):
     """
 
     loss = 0
-    vgg_layers_weights = [0.1, 0.1, 1, 1, 1]
 
-    for hr_features, sr_features, weight in zip(high_res_features, super_res_features, vgg_layers_weights):
-        loss += tf.reduce_mean(tf.math.abs(hr_features -
-                                           sr_features)) * weight
+    for hr_features, sr_features, weight in zip(high_res_features, super_res_features, vgg_layer_weights):
+        # loss += tf.reduce_mean(tf.subtract(hr_features - sr_features)) * weight
+        # loss += tf.reduce_sum(hr_features - sr_features) * weight
+        loss += compute_mean_squared_error(hr_features, sr_features) * weight
 
     return loss
 

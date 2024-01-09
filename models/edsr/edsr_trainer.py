@@ -11,13 +11,13 @@ from tensorflow.keras.applications.vgg19 import preprocess_input
 
 from models.vgg.vgg import VggBuilder
 from models.common.metrics import compute_psnr, compute_ssim
-from models.common.losses import compute_pixel_loss
+from models.common.losses import compute_pixel_loss, compute_content_loss
 
 
 class EdsrNetworkTrainer:
     """A helper class for training an EDSR model."""
 
-    def __init__(self, model, learning_rate=1e-4):
+    def __init__(self, model, learning_rate=1e-4, use_content_loss=False):
         """Constructor.
 
         Args:
@@ -26,8 +26,18 @@ class EdsrNetworkTrainer:
             learning_rate: The learning rate.
         """
 
-        self.vgg = VggBuilder(layers=['block1_conv2', 'block2_conv2', 'block3_conv4', 'block4_conv4', 'block5_conv4']).build(
-            input_shape=(None, None, 3))
+        self.use_content_loss = use_content_loss
+
+        if use_content_loss:
+            self.vgg_layers = ['block1_conv2', 'block2_conv2',
+                               'block3_conv4', 'block4_conv4', 'block5_conv4']
+            self.vgg_layer_weights = [0.1, 0.1, 1, 1, 1]
+
+            # self.vgg_layers = ['block5_conv4']
+            # self.vgg_layer_weights = [1]
+
+            self.vgg = VggBuilder(layers=self.vgg_layers).build(
+                input_shape=(None, None, 3))
 
         self.mean_absolute_error = tf.keras.losses.MeanAbsoluteError()
         self.mean_squared_error = tf.keras.losses.MeanSquaredError()
@@ -95,7 +105,7 @@ class EdsrNetworkTrainer:
                     log_file.flush()
 
                     self.__log(
-                        f'step: {current_step_in_set}/{steps}, completed: {current_step_in_set / steps * 100:.0f}%, loss: {current_loss.numpy():.2f}, psnr: {current_psnr.numpy():.2f}, ssim: {current_ssim.numpy():.2f}', indent_level=1, end='\n', flush=True)
+                        f'step: {current_step_in_set}/{steps}, completed: {current_step_in_set / steps * 100:2.0f}%, loss: {current_loss.numpy():.2f}, psnr: {current_psnr.numpy():.2f}, ssim: {current_ssim.numpy():.2f}', indent_level=1, end='\n', flush=True)
 
                     checkpoint.step.assign_add(1)
 
@@ -129,11 +139,15 @@ class EdsrNetworkTrainer:
 
             super_res_img = self.checkpoint.model(low_res_img, training=True)
 
-            # perceptual_loss = self.__content_loss(high_res_img, super_res_img)
-            pixel_loss = compute_pixel_loss(high_res_img, super_res_img)
+            loss_value = 0
 
-            # loss = perceptual_loss + pixel_loss
-            loss = pixel_loss
+            if self.use_content_loss:
+                loss_value = compute_content_loss(
+                    high_res_img, super_res_img, self.vgg, self.vgg_layer_weights)
+            else:
+                loss_value = compute_pixel_loss(high_res_img, super_res_img)
+
+            loss = loss_value
 
             psnr = compute_psnr(high_res_img, super_res_img)
             ssim = compute_ssim(high_res_img, super_res_img)

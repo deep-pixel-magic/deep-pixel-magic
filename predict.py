@@ -28,7 +28,8 @@ def main():
     img_lr = load_png('./.cache/data/DIV2K_valid_LR_bicubic/X4/0805x4.png')
     img_hr = load_png('./.cache/data/DIV2K_valid_HR/0805.png')
 
-    model = EdsrNetwork().build(scale=4, num_filters=64, num_residual_blocks=16)
+    model = EdsrNetwork().build(scale=4, num_filters=64,
+                                num_residual_blocks=16, residual_block_scaling=0.1, trainable=False)
 
     latest = tf.train.latest_checkpoint('./.cache/models/edsr')
     model.load_weights(latest)

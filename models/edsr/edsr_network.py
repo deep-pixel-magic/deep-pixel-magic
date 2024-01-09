@@ -20,7 +20,7 @@ class EdsrNetwork:
 
         self.rgb_mean = np.array([0.4488, 0.4371, 0.4040]) * 255
 
-    def build(self, scale, num_filters=64, num_residual_blocks=8, residual_block_scaling=None):
+    def build(self, scale, num_filters=64, num_residual_blocks=8, residual_block_scaling=None, trainable=True):
         """Builds the actual EDSR model.
 
         Args:
@@ -52,7 +52,10 @@ class EdsrNetwork:
 
         x = Lambda(self.__denormalize())(x)
 
-        return Model(x_in, x, name="edsr")
+        model = Model(x_in, x, name="edsr")
+        model.trainable = trainable
+
+        return model
 
     def __residual_block(self, x_in, filters, scaling):
         """Creates a residual block.
