@@ -105,7 +105,7 @@ class EdsrNetworkTrainer:
                     log_file.flush()
 
                     self.__log(
-                        f'step: {current_step_in_set}/{steps}, completed: {current_step_in_set / steps * 100:2.0f}%, loss: {current_loss.numpy():.2f}, psnr: {current_psnr.numpy():.2f}, ssim: {current_ssim.numpy():.2f}', indent_level=1, end='\n', flush=True)
+                        f'step: {current_step_in_set:3.0f}/{steps:3.0f}, completed: {current_step_in_set / steps * 100:3.0f}%, loss: {current_loss.numpy():.2f}, psnr: {current_psnr.numpy():.2f}, ssim: {current_ssim.numpy():.2f}', indent_level=1, end='\n', flush=True)
 
                     checkpoint.step.assign_add(1)
 

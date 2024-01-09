@@ -35,7 +35,13 @@ def main():
                                 num_residual_blocks=16, residual_block_scaling=0.1)
 
     learning_rate = PiecewiseConstantDecay(
-        boundaries=[1000, 2000, 4000], values=[1e-4, 5e-5, 2.5e-5, 1.25e-5])
+        boundaries=[1000, 2000, 3000, 4000], values=[1e-4, 5e-5, 2.5e-5, 1.25e-5, 0.625e-5])
+
+    trainer = EdsrNetworkTrainer(
+        model=model, learning_rate=learning_rate, use_content_loss=False)
+
+    trainer.train(dataset, epochs=30,
+                  steps=batched_data_set_cardinality)
 
     trainer = EdsrNetworkTrainer(
         model=model, learning_rate=learning_rate, use_content_loss=True)
