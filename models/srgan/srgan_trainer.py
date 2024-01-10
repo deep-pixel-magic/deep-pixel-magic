@@ -20,7 +20,11 @@ class SrganTrainer:
             learning_rate: The learning rate.
         """
 
-        self.vgg = VggBuilder(layers=['block1_conv2', 'block2_conv2', 'block3_conv4', 'block4_conv4', 'block5_conv4']).build(
+        self.vgg_layers = ['block1_conv2', 'block2_conv2',
+                           'block3_conv4', 'block4_conv4', 'block5_conv4']
+        self.vgg_layer_weights = [0.03125, 0.0625, 0.125, 0.25, 0.5]
+
+        self.vgg = VggBuilder(layers=self.vgg_layers).build(
             input_shape=(None, None, 3))
 
         self.generator_optimizer = optimizers.Adam(learning_rate)
@@ -77,7 +81,7 @@ class SrganTrainer:
                     current_step_in_set = current_step % performed_steps + 1
 
                 self.__log(
-                    f'step: {current_step_in_set}/{steps}, completed: {current_step_in_set / steps * 100:.0f}%, loss: {loss.numpy():.2f}, perceptual loss: {perc_loss.numpy():.2f}, generator loss: {gen_loss.numpy():.2f}, discriminator loss {disc_loss.numpy():.2f}, psnr: {psnr.numpy():.2f}, ssim: {ssim.numpy():.2f}', indent_level=1, end='\n', flush=True)
+                    f'step: {current_step_in_set:3.0f}/{steps:3.0f}, completed: {current_step_in_set / steps * 100:3.0f}%, loss: {loss.numpy():7.2f}, perceptual loss: {perc_loss.numpy():7.2f}, generator loss: {gen_loss.numpy():7.2f}, discriminator loss {disc_loss.numpy():7.2f}, psnr: {psnr.numpy():5.2f}, ssim: {ssim.numpy():4.2f}', indent_level=1, end='\n', flush=True)
 
                 checkpoint.step.assign_add(1)
 
@@ -94,6 +98,7 @@ class SrganTrainer:
             print(
                 f'generator restored at step: {self.checkpoint.step.numpy()}.')
 
+    @tf.function
     def __train_step(self, low_res_img, high_res_img):
         """Performs a single training step.
 
@@ -105,7 +110,7 @@ class SrganTrainer:
             The loss.
         """
 
-        with tf.GradientTape() as generator_tape, tf.GradientTape() as discriminator_tape:
+        with tf.GradientTape() as gen_tape, tf.GradientTape() as disc_tape:
             low_res_img = tf.cast(low_res_img, tf.float32)
             high_res_img = tf.cast(high_res_img, tf.float32)
 
@@ -121,31 +126,35 @@ class SrganTrainer:
             disc_loss = compute_discriminator_loss(disc_out_hr, disc_out_sr)
 
             perc_loss = compute_content_loss(
-                high_res_img, super_res_img, self.vgg)
-            loss = perc_loss + gen_loss
+                high_res_img, super_res_img, self.vgg, self.vgg_layer_weights, feature_scale=1 / 12.75)
+
+            loss = perc_loss + gen_loss * 1e-3
 
             psnr = compute_psnr(high_res_img, super_res_img)
             ssim = compute_ssim(high_res_img, super_res_img)
 
-        generator_variables = self.checkpoint.generator.trainable_variables
-        discriminator_variables = self.checkpoint.discriminator.trainable_variables
+            gen_lr = self.generator_optimizer.lr
+            disc_lr = self.discriminator_optimizer.lr
 
-        generator_gradients = generator_tape.gradient(
-            loss, generator_variables)
-        discriminator_gradients = discriminator_tape.gradient(
-            disc_loss, discriminator_variables)
+        gen_vars = self.checkpoint.generator.trainable_variables
+        disc_vars = self.checkpoint.discriminator.trainable_variables
 
-        generator_mapped_gradients = zip(
-            generator_gradients, generator_variables)
-        discriminator_mapped_gradients = zip(
-            discriminator_gradients, discriminator_variables)
+        gen_grads = gen_tape.gradient(
+            loss, gen_vars)
+        disc_grads = disc_tape.gradient(
+            disc_loss, disc_vars)
+
+        gen_mapped_grads = zip(
+            gen_grads, gen_vars)
+        disc_mapped_grads = zip(
+            disc_grads, disc_vars)
 
         self.checkpoint.generator_optimizer.apply_gradients(
-            generator_mapped_gradients)
+            gen_mapped_grads)
         self.checkpoint.discriminator_optimizer.apply_gradients(
-            discriminator_mapped_gradients)
+            disc_mapped_grads)
 
-        return loss, perc_loss, gen_loss, disc_loss, psnr, ssim
+        return loss, perc_loss, gen_loss, disc_loss, psnr, ssim, gen_lr, disc_lr
 
     def __log(self, message, indent_level=0, end='\n', flush=False):
         """Prints the specified message to the console.

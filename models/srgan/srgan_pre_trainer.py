@@ -62,7 +62,7 @@ class SrganPreTrainer:
             for low_res_img, high_res_img in dataset.take(steps):
                 current_step = checkpoint.step.numpy()
 
-                loss, psnr, ssim = self.__train_step(
+                loss, psnr, ssim, lr = self.__train_step(
                     low_res_img, high_res_img)
 
                 if not np.any(performed_steps):
@@ -71,7 +71,7 @@ class SrganPreTrainer:
                     current_step_in_set = current_step % performed_steps + 1
 
                 self.__log(
-                    f'step: {current_step_in_set}/{steps}, completed: {current_step_in_set / steps * 100:.0f}%, loss: {loss.numpy():.2f}, psnr: {psnr.numpy():.2f}, ssim: {ssim.numpy():.2f}', indent_level=1, end='\n', flush=True)
+                    f'step: {current_step_in_set:3.0f}/{steps:3.0f}, completed: {current_step_in_set / steps * 100:3.0f}%, loss: {loss.numpy():7.2f}, psnr: {psnr.numpy():5.2f}, ssim: {ssim.numpy():4.2f}, lr: {lr.numpy():.10f}', indent_level=1, end='\n', flush=True)
 
                 checkpoint.step.assign_add(1)
 
@@ -88,6 +88,7 @@ class SrganPreTrainer:
             print(
                 f'generator restored at step: {self.checkpoint.step.numpy()}.')
 
+    @tf.function
     def __train_step(self, low_res_img, high_res_img):
         """Performs a single training step.
 
@@ -99,7 +100,7 @@ class SrganPreTrainer:
             The loss.
         """
 
-        with tf.GradientTape() as generator_tape:
+        with tf.GradientTape() as gen_tape:
             low_res_img = tf.cast(low_res_img, tf.float32)
             high_res_img = tf.cast(high_res_img, tf.float32)
 
@@ -111,18 +112,20 @@ class SrganPreTrainer:
             psnr = compute_psnr(high_res_img, super_res_img)
             ssim = compute_ssim(high_res_img, super_res_img)
 
-        generator_variables = self.checkpoint.generator.trainable_variables
+            lr = self.generator_optimizer.lr
 
-        generator_gradients = generator_tape.gradient(
-            loss, generator_variables)
+        gen_vars = self.checkpoint.generator.trainable_variables
 
-        generator_mapped_gradients = zip(
-            generator_gradients, generator_variables)
+        gen_grads = gen_tape.gradient(
+            loss, gen_vars)
+
+        gen_mapped_grads = zip(
+            gen_grads, gen_vars)
 
         self.checkpoint.generator_optimizer.apply_gradients(
-            generator_mapped_gradients)
+            gen_mapped_grads)
 
-        return loss, psnr, ssim
+        return loss, psnr, ssim, lr
 
     def __log(self, message, indent_level=0, end='\n', flush=False):
         """Prints the specified message to the console.

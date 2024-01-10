@@ -27,26 +27,69 @@ def main():
     initial_data_set_cardinality = bundle.num()
     batched_data_set_cardinality = initial_data_set_cardinality // batch_size
 
+    num_steps_per_epoch = batched_data_set_cardinality
+    num_pre_train_epochs = 30
+    num_fine_tune_epochs = 30
+
     generator = SrganNetwork().build()
-    # discriminator = SrganDiscriminatorNetwork().build()
+
+    # Pre-train the model using pixel-wise loss.
+
+    decay_boundaries = [
+        10 * num_steps_per_epoch,  # first 10 epochs
+        15 * num_steps_per_epoch,  # next 5 epochs
+        20 * num_steps_per_epoch,  # next 5 epochs
+    ]
+
+    decay_values = [
+        1e-4,  # first 10 epochs
+        5e-5,  # next 5 epochs
+        2.5e-5,  # next 5 epochs
+        1.25e-5,  # remaining epochs
+    ]
 
     learning_rate = PiecewiseConstantDecay(
-        boundaries=[2000, 3000, 4000], values=[1e-4, 5e-5, 2.5e-5, 1.25e-5])
+        boundaries=decay_boundaries, values=decay_values)
 
     pre_trainer = SrganPreTrainer(
         generator=generator, learning_rate=learning_rate)
 
-    pre_trainer.train(dataset, epochs=80, steps=batched_data_set_cardinality)
+    pre_trainer.train(dataset, epochs=num_pre_train_epochs,
+                      steps=batched_data_set_cardinality)
 
-    # learning_rate = PiecewiseConstantDecay(
-    #     boundaries=[5000, 6000, 7000, 8000], values=[1e-4, 5e-5, 2.5e-5, 1.25e-5, 0.625e-5])
+    # Fine-tune the model using perceptual and adversarial loss.
 
-    # trainer = SrganTrainer(
-    #     generator=generator, discriminator=discriminator, learning_rate=learning_rate)
+    discriminator = SrganDiscriminatorNetwork().build()
 
-    # trainer.train(dataset, epochs=84, steps=batched_data_set_cardinality)
+    performed_steps = num_pre_train_epochs * num_steps_per_epoch
 
-    generator.save_weights(out_file)
+    decay_boundaries = [
+        performed_steps + 10 * num_steps_per_epoch,  # first 10 epochs
+        performed_steps + 20 * num_steps_per_epoch,  # next 10 epochs
+        performed_steps + 30 * num_steps_per_epoch,  # next 10 epochs
+    ]
+
+    decay_values = [
+        1e-6,  # first 10 epochs
+        5e-7,  # next 10 epochs
+        2.5e-7,  # next 10 epochs
+        1.25e-7,  # remaining epochs
+    ]
+
+    learning_rate = PiecewiseConstantDecay(
+        boundaries=decay_boundaries, values=decay_values)
+
+    trainer = SrganTrainer(
+        generator=generator, discriminator=discriminator, learning_rate=learning_rate)
+
+    trainer.train(dataset, epochs=num_pre_train_epochs +
+                  num_fine_tune_epochs, steps=batched_data_set_cardinality)
+
+    generator.save_weights('./.cache/models/srgan/generator.pkg')
+    discriminator.save_weights('./.cache/models/srgan/discriminator.pkg')
+
+    generator.save('srgan_generator.keras')
+    discriminator.save('srgan_discriminator.keras')
 
 
 if __name__ == "__main__":

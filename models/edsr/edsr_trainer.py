@@ -33,9 +33,6 @@ class EdsrNetworkTrainer:
                                'block3_conv4', 'block4_conv4', 'block5_conv4']
             self.vgg_layer_weights = [0.03125, 0.0625, 0.125, 0.25, 0.5]
 
-            # self.vgg_layers = ['block5_conv4']
-            # self.vgg_layer_weights = [1]
-
             self.vgg = VggBuilder(layers=self.vgg_layers).build(
                 input_shape=(None, None, 3))
 
@@ -109,7 +106,7 @@ class EdsrNetworkTrainer:
                     log_file.flush()
 
                     self.__log(
-                        f'step: {current_step_in_set:3.0f}/{steps:3.0f}, completed: {current_step_in_set / steps * 100:3.0f}%, loss: {current_loss.numpy():4.2f}, psnr: {current_psnr.numpy():2.2f}, ssim: {current_ssim.numpy():1.2f}, learning rate: {current_lr.numpy():1.10f}', indent_level=1, end='\n', flush=True)
+                        f'step: {current_step_in_set:3.0f}/{steps:3.0f}, completed: {current_step_in_set / steps * 100:3.0f}%, loss: {current_loss.numpy():7.2f}, psnr: {current_psnr.numpy():5.2f}, ssim: {current_ssim.numpy():3.2f}, learning rate: {current_lr.numpy():.10f}', indent_level=1, end='\n', flush=True)
 
                     checkpoint.step.assign_add(1)
 

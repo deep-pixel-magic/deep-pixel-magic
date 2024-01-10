@@ -13,10 +13,8 @@ def compute_psnr(high_res_img, super_res_img):
         The PSNR.
     """
 
-    raw_psnr = tf.image.psnr(high_res_img, super_res_img, max_val=255)
-    psnr = tf.reduce_mean(raw_psnr)
-
-    return psnr
+    batched_psnr = tf.image.psnr(high_res_img, super_res_img, max_val=255)
+    return tf.reduce_mean(batched_psnr)
 
 
 @tf.function
@@ -31,8 +29,6 @@ def compute_ssim(high_res_img, super_res_img):
         The SSIM.
     """
 
-    raw_ssim = tf.image.ssim(high_res_img, super_res_img, max_val=255.0, filter_size=11,
-                             filter_sigma=1.5, k1=0.01, k2=0.03)
-    ssim = tf.reduce_mean(raw_ssim)
-
-    return ssim
+    batched_ssim = tf.image.ssim(high_res_img, super_res_img, max_val=255.0, filter_size=11,
+                                 filter_sigma=1.5, k1=0.01, k2=0.03)
+    return tf.reduce_mean(batched_ssim)
