@@ -88,7 +88,7 @@ class SrganNetwork:
 
         x = Conv2DTranspose(
             num_filters,
-            kernel_size=4,
+            kernel_size=2,
             strides=(2, 2),
             padding='same',
             kernel_initializer=kernel_initializer)(x_in)

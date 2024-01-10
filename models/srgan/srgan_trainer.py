@@ -72,7 +72,7 @@ class SrganTrainer:
             for low_res_img, high_res_img in dataset.take(steps):
                 current_step = checkpoint.step.numpy()
 
-                loss, perc_loss, gen_loss, disc_loss, psnr, ssim = self.__train_step(
+                loss, perc_loss, gen_loss, disc_loss, psnr, ssim, gen_lr, disc_lr = self.__train_step(
                     low_res_img, high_res_img)
 
                 if not np.any(performed_steps):
@@ -81,7 +81,7 @@ class SrganTrainer:
                     current_step_in_set = current_step % performed_steps + 1
 
                 self.__log(
-                    f'step: {current_step_in_set:3.0f}/{steps:3.0f}, completed: {current_step_in_set / steps * 100:3.0f}%, loss: {loss.numpy():7.2f}, perceptual loss: {perc_loss.numpy():7.2f}, generator loss: {gen_loss.numpy():7.2f}, discriminator loss {disc_loss.numpy():7.2f}, psnr: {psnr.numpy():5.2f}, ssim: {ssim.numpy():4.2f}', indent_level=1, end='\n', flush=True)
+                    f'step: {current_step_in_set:3.0f}/{steps:3.0f}, completed: {current_step_in_set / steps * 100:3.0f}%, loss: {loss.numpy():7.2f}, perceptual loss: {perc_loss.numpy():7.2f}, generator loss: {gen_loss.numpy():7.2f}, discriminator loss: {disc_loss.numpy():7.2f}, psnr: {psnr.numpy():5.2f}, ssim: {ssim.numpy():4.2f}, generator lr: {gen_lr:.10f}, discriminator lr: {disc_lr:.10f}', indent_level=1, end='\n', flush=True)
 
                 checkpoint.step.assign_add(1)
 
