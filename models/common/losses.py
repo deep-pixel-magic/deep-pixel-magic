@@ -10,7 +10,7 @@ compute_binary_cross_entropy = tf.keras.losses.BinaryCrossentropy(
 
 
 @tf.function
-def compute_content_loss(high_res_img, super_res_img, vgg_model, vgg_layer_weights):
+def compute_content_loss(high_res_img, super_res_img, vgg_model, vgg_layer_weights, feature_scale=1 / 12.75):
     """Calculates the content loss of the super resolution image using the keras VGG model.
 
     Args:
@@ -30,51 +30,43 @@ def compute_content_loss(high_res_img, super_res_img, vgg_model, vgg_layer_weigh
     high_res_features = vgg_model(high_res_img_pp)
     super_res_features = vgg_model(super_res_img_pp)
 
-    return compute_perceptual_loss(high_res_features, super_res_features, vgg_layer_weights)
+    return compute_euclidean_distance(high_res_features, super_res_features, vgg_layer_weights, feature_scale)
 
 
 @tf.function
-def compute_perceptual_loss(high_res_features, super_res_features, vgg_layer_weights):
-    """Calculates the perceptual loss of the super resolution image.
+def compute_euclidean_distance(high_res_features, super_res_features, vgg_layer_weights, feature_scale):
+    """Calculates the weighted euclidean distance between the high resolution features and the super resolution features.
 
     Args:
         high_res_features: The high resolution features.
         super_res_features: The generated super resolution features.
+        vgg_layer_weights: The weights of the VGG layers.
+        feature_scale: The feature scale.
 
     Returns:
-        The perceptual loss.
+        The average euclidean distance across all layers.
     """
 
     loss = 0
 
     for hr_features, sr_features, weight in zip(high_res_features, super_res_features, vgg_layer_weights):
-        # loss += tf.reduce_mean(tf.subtract(hr_features - sr_features)) * weight
-        # loss += tf.reduce_sum(hr_features - sr_features) * weight
-        loss += compute_mean_squared_error(hr_features, sr_features) * weight
+        scaled_hr_features = hr_features * feature_scale
+        scaled_sr_features = sr_features * feature_scale
 
-    return loss
+        # All of those are the same.
 
+        euclidean_distance = tf.norm(
+            scaled_sr_features - scaled_hr_features, ord='euclidean')
 
-@tf.function
-def compute_euclidean_distance(high_res_features, super_res_features):
-    """Calculates the perceptual loss of the super resolution image.
+        # euclidean_distance = tf.sqrt(tf.reduce_sum(
+        #     tf.square(scaled_sr_features - scaled_hr_features)))
 
-    Args:
-        high_res_features: The high resolution features.
-        super_res_features: The generated super resolution features.
+        # euclidean_distance = K.sqrt(K.sum(K.square(scaled_sr_features -
+        #                                              scaled_hr_features)))
 
-    Returns:
-        The perceptual loss.
-    """
+        loss += euclidean_distance * weight
 
-    loss = 0
-    vgg_layers_weights = [0.1, 0.1, 1, 1, 1]
-
-    for hr_features, sr_features, weight in zip(high_res_features, super_res_features, vgg_layers_weights):
-        loss += K.sqrt(K.sum(K.square(sr_features -
-                       hr_features), axis=-1)) * weight
-
-    return loss
+    return loss / len(vgg_layer_weights)
 
 
 @tf.function
@@ -96,9 +88,12 @@ def compute_pixel_loss(high_res_img, super_res_img):
 def compute_discriminator_loss(high_res_img, super_res_img):
 
     high_res_loss = compute_binary_cross_entropy(
-        tf.ones_like(high_res_img), high_res_img)
+        tf.ones_like(high_res_img),
+        high_res_img)
+
     super_res_loss = compute_binary_cross_entropy(
-        tf.zeros_like(super_res_img), super_res_img)
+        tf.zeros_like(super_res_img),
+        super_res_img)
 
     return high_res_loss + super_res_loss
 

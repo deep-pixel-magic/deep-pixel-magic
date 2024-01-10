@@ -115,7 +115,7 @@ class EdsrNetwork:
 
         x_in = Conv2DTranspose(
             filters=num_filters * (factor ** 2),
-            kernel_size=factor * 2,
+            kernel_size=factor,
             strides=(factor, factor),
             kernel_initializer=kernel_initializer,
             padding='same')(x_in)

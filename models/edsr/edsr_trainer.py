@@ -31,7 +31,7 @@ class EdsrNetworkTrainer:
         if use_content_loss:
             self.vgg_layers = ['block1_conv2', 'block2_conv2',
                                'block3_conv4', 'block4_conv4', 'block5_conv4']
-            self.vgg_layer_weights = [0.1, 0.1, 1, 1, 1]
+            self.vgg_layer_weights = [0.03125, 0.0625, 0.125, 0.25, 0.5]
 
             # self.vgg_layers = ['block5_conv4']
             # self.vgg_layer_weights = [1]
@@ -78,7 +78,7 @@ class EdsrNetworkTrainer:
         csv_file = './.cache/logs/edsr.csv'
         os.makedirs(os.path.dirname(csv_file), exist_ok=True)
 
-        with open(csv_file, 'a') as log_file:
+        with open(csv_file, 'w') as log_file:
             log_writer = csv.writer(log_file, delimiter=',')
             log_writer.writerow(['epoch', 'step', 'loss', 'psnr', 'ssim'])
 
@@ -89,11 +89,15 @@ class EdsrNetworkTrainer:
 
                 self.__log(f'epoch: {current_epoch + 1}/{epochs}')
 
+                average_loss = 0
+
                 for low_res_img, high_res_img in dataset.take(steps):
 
                     current_step = checkpoint.step.numpy()
-                    current_loss, current_psnr, current_ssim = self.__train_step(
+                    current_loss, current_psnr, current_ssim, learning_rate = self.__train_step(
                         low_res_img, high_res_img)
+
+                    average_loss += current_loss
 
                     if not np.any(performed_steps):
                         current_step_in_set = current_step + 1
@@ -101,15 +105,18 @@ class EdsrNetworkTrainer:
                         current_step_in_set = current_step % performed_steps + 1
 
                     log_writer.writerow(
-                        [current_epoch, checkpoint.step.numpy() + 1, current_loss.numpy(), current_psnr.numpy(), current_ssim.numpy()])
+                        [current_epoch, current_step + 1, current_loss, current_psnr, current_ssim])
                     log_file.flush()
 
                     self.__log(
-                        f'step: {current_step_in_set:3.0f}/{steps:3.0f}, completed: {current_step_in_set / steps * 100:3.0f}%, loss: {current_loss.numpy():.2f}, psnr: {current_psnr.numpy():.2f}, ssim: {current_ssim.numpy():.2f}', indent_level=1, end='\n', flush=True)
+                        f'step: {current_step_in_set:3.0f}/{steps:3.0f}, completed: {current_step_in_set / steps * 100:3.0f}%, loss: {current_loss:4.2f}, psnr: {current_psnr:2.2f}, ssim: {current_ssim:1.2f}, learning rate: {learning_rate:1.10f}', indent_level=1, end='\n', flush=True)
 
                     checkpoint.step.assign_add(1)
 
                 checkpoint_manager.save()
+
+                self.__log(
+                    f'done: average loss: {average_loss / steps:.2f}', indent_level=1, end='\n', flush=True)
                 self.__log('')
 
     def restore(self):
@@ -132,6 +139,8 @@ class EdsrNetworkTrainer:
             The loss.
         """
 
+        optimizer = self.checkpoint.optimizer
+
         with tf.GradientTape() as tape:
 
             low_res_img = tf.cast(low_res_img, tf.float32)
@@ -143,7 +152,11 @@ class EdsrNetworkTrainer:
 
             if self.use_content_loss:
                 loss_value = compute_content_loss(
-                    high_res_img, super_res_img, self.vgg, self.vgg_layer_weights)
+                    high_res_img,
+                    super_res_img,
+                    self.vgg,
+                    self.vgg_layer_weights,
+                    feature_scale=1 / 12.75)
             else:
                 loss_value = compute_pixel_loss(high_res_img, super_res_img)
 
@@ -152,14 +165,16 @@ class EdsrNetworkTrainer:
             psnr = compute_psnr(high_res_img, super_res_img)
             ssim = compute_ssim(high_res_img, super_res_img)
 
+            learning_rate = optimizer.lr
+
         variables = self.checkpoint.model.trainable_variables
 
         gradients = tape.gradient(loss, variables)
         mapped_gradients = zip(gradients, variables)
 
-        self.checkpoint.optimizer.apply_gradients(mapped_gradients)
+        optimizer.apply_gradients(mapped_gradients)
 
-        return loss, psnr, ssim
+        return loss.numpy(), psnr.numpy(), ssim.numpy(), learning_rate.numpy()
 
     def __log(self, message, indent_level=0, end='\n', flush=False):
         """Prints the specified message to the console.

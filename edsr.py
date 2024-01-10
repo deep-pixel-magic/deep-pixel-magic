@@ -31,22 +31,61 @@ def main():
     initial_data_set_cardinality = bundle.num()
     batched_data_set_cardinality = initial_data_set_cardinality // batch_size
 
+    num_steps_per_epoch = batched_data_set_cardinality
+    num_pre_train_epochs = 30
+    num_fine_tune_epochs = 30
+
     model = EdsrNetwork().build(scale=4, num_filters=64,
                                 num_residual_blocks=16, residual_block_scaling=0.1)
 
+    # Pre-train the model using pixel-wise loss.
+
+    decay_boundaries = [
+        10 * num_steps_per_epoch,  # first 10 epochs
+        15 * num_steps_per_epoch,  # next 5 epochs
+        20 * num_steps_per_epoch,  # next 5 epochs
+    ]
+
+    decay_values = [
+        1e-4,  # first 10 epochs
+        5e-5,  # next 5 epochs
+        2.5e-5,  # next 5 epochs
+        1.25e-5,  # remaining epochs
+    ]
+
     learning_rate = PiecewiseConstantDecay(
-        boundaries=[1000, 2000, 3000, 4000], values=[1e-4, 5e-5, 2.5e-5, 1.25e-5, 0.625e-5])
+        boundaries=decay_boundaries, values=decay_values)
 
     trainer = EdsrNetworkTrainer(
         model=model, learning_rate=learning_rate, use_content_loss=False)
 
-    trainer.train(dataset, epochs=30,
+    trainer.train(dataset, epochs=num_pre_train_epochs,
                   steps=batched_data_set_cardinality)
+
+    # Fine-tune the model using perceptual loss.
+
+    performed_steps = num_pre_train_epochs * num_steps_per_epoch
+
+    decay_boundaries = [
+        performed_steps + 10 * num_steps_per_epoch,  # first 10 epochs
+        performed_steps + 20 * num_steps_per_epoch,  # next 10 epochs
+        performed_steps + 30 * num_steps_per_epoch,  # next 10 epochs
+    ]
+
+    decay_values = [
+        1e-6,  # first 10 epochs
+        5e-7,  # next 10 epochs
+        2.5e-7,  # next 10 epochs
+        1.25e-7,  # remaining epochs
+    ]
+
+    learning_rate = PiecewiseConstantDecay(
+        boundaries=decay_boundaries, values=decay_values)
 
     trainer = EdsrNetworkTrainer(
         model=model, learning_rate=learning_rate, use_content_loss=True)
 
-    trainer.train(dataset, epochs=30,
+    trainer.train(dataset, epochs=num_pre_train_epochs + num_fine_tune_epochs,
                   steps=batched_data_set_cardinality)
 
     model.save_weights(out_file)
