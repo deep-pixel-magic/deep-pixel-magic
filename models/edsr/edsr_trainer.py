@@ -94,7 +94,7 @@ class EdsrNetworkTrainer:
                 for low_res_img, high_res_img in dataset.take(steps):
 
                     current_step = checkpoint.step.numpy()
-                    current_loss, current_psnr, current_ssim, learning_rate = self.__train_step(
+                    current_loss, current_psnr, current_ssim, current_lr = self.__train_step(
                         low_res_img, high_res_img)
 
                     average_loss += current_loss
@@ -105,11 +105,11 @@ class EdsrNetworkTrainer:
                         current_step_in_set = current_step % performed_steps + 1
 
                     log_writer.writerow(
-                        [current_epoch, current_step + 1, current_loss, current_psnr, current_ssim])
+                        [current_epoch, current_step + 1, current_loss.numpy(), current_psnr.numpy(), current_ssim.numpy()])
                     log_file.flush()
 
                     self.__log(
-                        f'step: {current_step_in_set:3.0f}/{steps:3.0f}, completed: {current_step_in_set / steps * 100:3.0f}%, loss: {current_loss:4.2f}, psnr: {current_psnr:2.2f}, ssim: {current_ssim:1.2f}, learning rate: {learning_rate:1.10f}', indent_level=1, end='\n', flush=True)
+                        f'step: {current_step_in_set:3.0f}/{steps:3.0f}, completed: {current_step_in_set / steps * 100:3.0f}%, loss: {current_loss.numpy():4.2f}, psnr: {current_psnr.numpy():2.2f}, ssim: {current_ssim.numpy():1.2f}, learning rate: {current_lr.numpy():1.10f}', indent_level=1, end='\n', flush=True)
 
                     checkpoint.step.assign_add(1)
 
@@ -128,6 +128,7 @@ class EdsrNetworkTrainer:
             print(
                 f'model restored at step: {self.checkpoint.step.numpy()}.')
 
+    @tf.function
     def __train_step(self, low_res_img, high_res_img):
         """Performs a single training step.
 
@@ -165,7 +166,7 @@ class EdsrNetworkTrainer:
             psnr = compute_psnr(high_res_img, super_res_img)
             ssim = compute_ssim(high_res_img, super_res_img)
 
-            learning_rate = optimizer.lr
+            lr = optimizer.lr
 
         variables = self.checkpoint.model.trainable_variables
 
@@ -174,7 +175,7 @@ class EdsrNetworkTrainer:
 
         optimizer.apply_gradients(mapped_gradients)
 
-        return loss.numpy(), psnr.numpy(), ssim.numpy(), learning_rate.numpy()
+        return loss, psnr, ssim, lr
 
     def __log(self, message, indent_level=0, end='\n', flush=False):
         """Prints the specified message to the console.
