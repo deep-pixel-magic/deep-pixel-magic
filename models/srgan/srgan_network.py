@@ -18,7 +18,7 @@ class SrganNetwork:
 
         self.rgb_mean = np.array([0.4488, 0.4371, 0.4040]) * 255
 
-    def build(self, num_filters=64, num_residual_blocks=16):
+    def build(self, num_filters=64, num_residual_blocks=16, use_batch_normalization=True):
         """Builds the actual SRGAN model.
 
         Args:
@@ -38,18 +38,21 @@ class SrganNetwork:
             x = self.__residual_block(x, num_filters)
 
         x = Conv2D(num_filters, kernel_size=3, padding='same')(x)
-        x = BatchNormalization()(x)
+
+        if use_batch_normalization:
+            x = BatchNormalization()(x)
+
         x = Add()([x_pre_res, x])
 
-        x = self.__upsample_deconvolution(x, num_filters * 4)
-        x = self.__upsample_deconvolution(x, num_filters * 4)
+        x = self.__upsample_deconvolution(x, num_filters * 4, factor=2)
+        x = self.__upsample_deconvolution(x, num_filters * 4, factor=2)
 
         x = Conv2D(3, kernel_size=9, padding='same', activation='tanh')(x)
         x = Lambda(self.__denormalize())(x)
 
         return Model(x_in, x)
 
-    def __residual_block(self, x_in, num_filters, momentum=0.8):
+    def __residual_block(self, x_in, num_filters, use_batch_normalization=True, momentum=0.8):
         """Creates a residual block.
 
         Args:
@@ -62,16 +65,22 @@ class SrganNetwork:
         """
 
         x = Conv2D(num_filters, kernel_size=3, padding='same')(x_in)
-        x = BatchNormalization(momentum=momentum)(x)
+
+        if use_batch_normalization:
+            x = BatchNormalization(momentum=momentum)(x)
+
         x = PReLU(shared_axes=[1, 2])(x)
 
         x = Conv2D(num_filters, kernel_size=3, padding='same')(x)
-        x = BatchNormalization(momentum=momentum)(x)
+
+        if use_batch_normalization:
+            x = BatchNormalization(momentum=momentum)(x)
+
         x = Add()([x_in, x])
 
         return x
 
-    def __upsample_deconvolution(self, x_in, num_filters):
+    def __upsample_deconvolution(self, x_in, num_filters, factor=2):
         """Upsamples the input using sub-pixel convolution.
 
         Args:
@@ -84,12 +93,12 @@ class SrganNetwork:
 
         kernel_initializer = IcnrInitializer(
             tf.keras.initializers.GlorotUniform(),
-            scale=2)
+            scale=factor)
 
         x = Conv2DTranspose(
             num_filters,
-            kernel_size=2,
-            strides=(2, 2),
+            kernel_size=factor,
+            strides=factor,
             padding='same',
             kernel_initializer=kernel_initializer)(x_in)
 

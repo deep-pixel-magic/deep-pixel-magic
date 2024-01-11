@@ -12,9 +12,6 @@ from tools.datasets.div2k.tensorflow import TensorflowDataset, TensorflowPreproc
 
 
 def main():
-    out_dir = './.cache/models/srgan/'
-    out_file = os.path.join(out_dir, 'model.pkg')
-
     data_dir_low_res = "./.cache/data/DIV2K_train_LR_bicubic/X4"
     data_dir_high_res = "./.cache/data/DIV2K_train_HR"
 
@@ -31,14 +28,15 @@ def main():
     num_pre_train_epochs = 30
     num_fine_tune_epochs = 30
 
-    generator = SrganNetwork().build()
+    generator = SrganNetwork().build(num_filters=64, num_residual_blocks=16,
+                                     use_batch_normalization=True)
 
     # Pre-train the model using pixel-wise loss.
 
     decay_boundaries = [
-        10 * num_steps_per_epoch,  # first 10 epochs
-        15 * num_steps_per_epoch,  # next 5 epochs
+        15 * num_steps_per_epoch,  # first 10 epochs
         20 * num_steps_per_epoch,  # next 5 epochs
+        25 * num_steps_per_epoch,  # next 5 epochs
     ]
 
     decay_values = [
@@ -70,10 +68,10 @@ def main():
     ]
 
     decay_values = [
-        1e-6,  # first 10 epochs
-        5e-7,  # next 10 epochs
-        2.5e-7,  # next 10 epochs
-        1.25e-7,  # remaining epochs
+        1e-4,  # first 10 epochs
+        5e-5,  # next 10 epochs
+        2.5e-5,  # next 10 epochs
+        1.25e-5,  # remaining epochs
     ]
 
     learning_rate = PiecewiseConstantDecay(
@@ -87,9 +85,6 @@ def main():
 
     generator.save_weights('./.cache/models/srgan/generator.pkg')
     discriminator.save_weights('./.cache/models/srgan/discriminator.pkg')
-
-    generator.save('srgan_generator.keras')
-    discriminator.save('srgan_discriminator.keras')
 
 
 if __name__ == "__main__":

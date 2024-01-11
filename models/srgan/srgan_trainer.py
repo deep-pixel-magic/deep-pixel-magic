@@ -72,7 +72,7 @@ class SrganTrainer:
             for low_res_img, high_res_img in dataset.take(steps):
                 current_step = checkpoint.step.numpy()
 
-                loss, perc_loss, gen_loss, disc_loss, psnr, ssim, gen_lr, disc_lr = self.__train_step(
+                loss, dxhr, dxsr, content_loss, gen_loss, disc_loss, psnr, ssim, gen_lr, disc_lr = self.__train_step(
                     low_res_img, high_res_img)
 
                 if not np.any(performed_steps):
@@ -81,7 +81,7 @@ class SrganTrainer:
                     current_step_in_set = current_step % performed_steps + 1
 
                 self.__log(
-                    f'step: {current_step_in_set:3.0f}/{steps:3.0f}, completed: {current_step_in_set / steps * 100:3.0f}%, loss: {loss.numpy():7.2f}, perceptual loss: {perc_loss.numpy():7.2f}, generator loss: {gen_loss.numpy():7.2f}, discriminator loss: {disc_loss.numpy():7.2f}, psnr: {psnr.numpy():5.2f}, ssim: {ssim.numpy():4.2f}, generator lr: {gen_lr:.10f}, discriminator lr: {disc_lr:.10f}', indent_level=1, end='\n', flush=True)
+                    f'step: {current_step_in_set:3.0f}/{steps:3.0f}, completed: {current_step_in_set / steps * 100:3.0f}%, loss: {loss.numpy():7.2f}, dhr(x): {dxhr.numpy():4.2f}, dsr(x): {dxsr.numpy():4.2f}, content loss: {content_loss.numpy():7.2f}, generator loss: {gen_loss.numpy():4.2f}, discriminator loss: {disc_loss.numpy():4.2f}, psnr: {psnr.numpy():5.2f}, ssim: {ssim.numpy():4.2f}, glr: {gen_lr.numpy():.10f}, dlr: {disc_lr.numpy():.10f}', indent_level=1, end='\n', flush=True)
 
                 checkpoint.step.assign_add(1)
 
@@ -125,10 +125,13 @@ class SrganTrainer:
             gen_loss = compute_generator_loss(disc_out_sr)
             disc_loss = compute_discriminator_loss(disc_out_hr, disc_out_sr)
 
-            perc_loss = compute_content_loss(
+            content_loss = compute_content_loss(
                 high_res_img, super_res_img, self.vgg, self.vgg_layer_weights, feature_scale=1 / 12.75)
 
-            loss = perc_loss + gen_loss * 1e-3
+            loss = content_loss + gen_loss * 1000
+
+            dxhr = tf.reduce_mean(disc_out_hr)
+            dxsr = tf.reduce_mean(disc_out_sr)
 
             psnr = compute_psnr(high_res_img, super_res_img)
             ssim = compute_ssim(high_res_img, super_res_img)
@@ -154,7 +157,7 @@ class SrganTrainer:
         self.checkpoint.discriminator_optimizer.apply_gradients(
             disc_mapped_grads)
 
-        return loss, perc_loss, gen_loss, disc_loss, psnr, ssim, gen_lr, disc_lr
+        return loss, dxhr, dxsr, content_loss, gen_loss, disc_loss, psnr, ssim, gen_lr, disc_lr
 
     def __log(self, message, indent_level=0, end='\n', flush=False):
         """Prints the specified message to the console.
