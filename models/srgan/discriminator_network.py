@@ -23,8 +23,9 @@ class SrganDiscriminatorNetwork:
         shape = (self.img_res, self.img_res, 3)
 
         x_in = Input(shape=shape)
-        x = Rescaling(scale=1.0 / 127.5, offset=-1.0)(x_in)
+        # x = Rescaling(scale=1.0 / 127.5, offset=-1.0)(x_in)
 
+        x = x_in
         x = self.__discriminator_block(
             x, num_filters, batch_normalization=False)
         x = self.__discriminator_block(x, num_filters, strides=2)

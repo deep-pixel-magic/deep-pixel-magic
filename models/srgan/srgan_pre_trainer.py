@@ -4,14 +4,14 @@ import tensorflow as tf
 from tensorflow.keras import optimizers
 
 from models.vgg.vgg import VggBuilder
-from models.common.losses import compute_content_loss, compute_pixel_loss, compute_discriminator_loss
+from models.common.losses import compute_perceptual_loss, compute_pixel_loss, compute_discriminator_loss
 from models.common.metrics import compute_psnr, compute_ssim
 
 
 class SrganPreTrainer:
     """A helper class for training an SRGAN model."""
 
-    def __init__(self, generator, learning_rate=1e-4):
+    def __init__(self, generator, learning_rate=1e-4, rgb_mean=np.array([0.4488, 0.4371, 0.4040]) * 255):
         """Constructor.
 
         Args:
@@ -19,6 +19,8 @@ class SrganPreTrainer:
             discriminator: The discriminator model.
             learning_rate: The learning rate.
         """
+        
+        self.rgb_mean = rgb_mean
 
         self.generator_optimizer = optimizers.Adam(learning_rate)
 
@@ -59,11 +61,15 @@ class SrganPreTrainer:
 
             self.__log(f'epoch: {current_epoch + 1}/{epochs}')
 
+            average_loss = 0
+
             for low_res_img, high_res_img in dataset.take(steps):
                 current_step = checkpoint.step.numpy()
 
                 loss, psnr, ssim, lr = self.__train_step(
                     low_res_img, high_res_img)
+                
+                average_loss += loss
 
                 if not np.any(performed_steps):
                     current_step_in_set = current_step + 1
@@ -71,12 +77,18 @@ class SrganPreTrainer:
                     current_step_in_set = current_step % performed_steps + 1
 
                 self.__log(
-                    f'step: {current_step_in_set:3.0f}/{steps:3.0f}, completed: {current_step_in_set / steps * 100:3.0f}%, loss: {loss.numpy():7.2f}, psnr: {psnr.numpy():5.2f}, ssim: {ssim.numpy():4.2f}, lr: {lr.numpy():.10f}', indent_level=1, end='\n', flush=True)
+                    f'step: {current_step_in_set:3.0f}/{steps:3.0f}, completed: {current_step_in_set / steps * 100:3.0f}%, loss: {loss.numpy():8.6f}, psnr: {psnr.numpy():5.2f}, ssim: {ssim.numpy():4.2f}, lr: {lr.numpy():.10f}', indent_level=1, end='\n', flush=True)
 
                 checkpoint.step.assign_add(1)
 
-            checkpoint_manager.save()
+            if current_epoch > 0 and (current_epoch + 1) % 10 == 0:
+                checkpoint_manager.save()
 
+            if current_epoch == epochs - 1:
+                checkpoint_manager.save()
+
+            self.__log(
+                f'done: average loss: {average_loss / steps:.2f}', indent_level=1, end='\n', flush=True)
             self.__log('')
 
     def restore(self):
@@ -86,7 +98,7 @@ class SrganPreTrainer:
             self.checkpoint.restore(
                 self.checkpoint_manager.latest_checkpoint)
             print(
-                f'generator restored at step: {self.checkpoint.step.numpy()}.')
+                f'model restored at step: {self.checkpoint.step.numpy()}.')
 
     @tf.function
     def __train_step(self, low_res_img, high_res_img):
@@ -100,32 +112,34 @@ class SrganPreTrainer:
             The loss.
         """
 
+        checkpoint = self.checkpoint
+
+        generator = checkpoint.generator
+        optimizer = checkpoint.generator_optimizer
+
         with tf.GradientTape() as gen_tape:
-            low_res_img = tf.cast(low_res_img, tf.float32)
-            high_res_img = tf.cast(high_res_img, tf.float32)
+            # low_res_img = tf.cast(low_res_img, tf.float32)
+            # high_res_img = tf.cast(high_res_img, tf.float32)
 
-            super_res_img = self.checkpoint.generator(
-                low_res_img, training=True)
-
+            super_res_img = generator(low_res_img, training=True)
             loss = compute_pixel_loss(high_res_img, super_res_img)
 
-            psnr = compute_psnr(high_res_img, super_res_img)
-            ssim = compute_ssim(high_res_img, super_res_img)
+        gen_vars = generator.trainable_variables
+        gen_grads = gen_tape.gradient(loss, gen_vars)
+        gen_mapped_grads = zip(gen_grads, gen_vars)
 
-            lr = self.generator_optimizer.lr
+        optimizer.apply_gradients(gen_mapped_grads)
+        
+        denorm_hr = (high_res_img * 127.5) + self.rgb_mean
+        denorm_sr = (super_res_img * 127.5) + self.rgb_mean
 
-        gen_vars = self.checkpoint.generator.trainable_variables
+        psnr = compute_psnr(denorm_hr, denorm_sr)
+        ssim = compute_ssim(denorm_hr, denorm_sr)
 
-        gen_grads = gen_tape.gradient(
-            loss, gen_vars)
+        # psnr = compute_psnr(high_res_img, super_res_img)
+        # ssim = compute_ssim(high_res_img, super_res_img)
 
-        gen_mapped_grads = zip(
-            gen_grads, gen_vars)
-
-        self.checkpoint.generator_optimizer.apply_gradients(
-            gen_mapped_grads)
-
-        return loss, psnr, ssim, lr
+        return loss, psnr, ssim, optimizer.lr
 
     def __log(self, message, indent_level=0, end='\n', flush=False):
         """Prints the specified message to the console.

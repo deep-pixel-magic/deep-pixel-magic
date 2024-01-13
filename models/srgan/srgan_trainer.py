@@ -4,14 +4,14 @@ import tensorflow as tf
 from tensorflow.keras import optimizers
 
 from models.vgg.vgg import VggBuilder
-from models.common.losses import compute_content_loss, compute_generator_loss, compute_discriminator_loss
+from models.common.losses import compute_pixel_loss, compute_perceptual_loss, compute_generator_loss, compute_discriminator_loss
 from models.common.metrics import compute_psnr, compute_ssim
 
 
 class SrganTrainer:
     """A helper class for training an SRGAN model."""
 
-    def __init__(self, generator, discriminator, learning_rate=1e-4):
+    def __init__(self, generator, discriminator, generator_lr=1e-4, discriminator_lr=1e-4, rgb_mean=np.array([0.4488, 0.4371, 0.4040]) * 255):
         """Constructor.
 
         Args:
@@ -20,15 +20,20 @@ class SrganTrainer:
             learning_rate: The learning rate.
         """
 
+        self.rgb_mean = rgb_mean
+
         self.vgg_layers = ['block1_conv2', 'block2_conv2',
                            'block3_conv4', 'block4_conv4', 'block5_conv4']
         self.vgg_layer_weights = [0.03125, 0.0625, 0.125, 0.25, 0.5]
 
+        # self.vgg_layers = ['block5_conv4']
+        # self.vgg_layer_weights = [1]
+
         self.vgg = VggBuilder(layers=self.vgg_layers).build(
             input_shape=(None, None, 3))
 
-        self.generator_optimizer = optimizers.Adam(learning_rate)
-        self.discriminator_optimizer = optimizers.Adam(learning_rate)
+        self.generator_optimizer = optimizers.Adam(generator_lr)
+        self.discriminator_optimizer = optimizers.Adam(discriminator_lr)
 
         self.checkpoint = tf.train.Checkpoint(step=tf.Variable(0),
                                               generator=generator,
@@ -72,7 +77,7 @@ class SrganTrainer:
             for low_res_img, high_res_img in dataset.take(steps):
                 current_step = checkpoint.step.numpy()
 
-                loss, dxhr, dxsr, content_loss, gen_loss, disc_loss, psnr, ssim, gen_lr, disc_lr = self.__train_step(
+                loss, dxhr, dxsr, pixel_loss, perceptual_loss, gen_loss, disc_loss, psnr, ssim, gen_lr, disc_lr = self.__train_step(
                     low_res_img, high_res_img)
 
                 if not np.any(performed_steps):
@@ -81,22 +86,24 @@ class SrganTrainer:
                     current_step_in_set = current_step % performed_steps + 1
 
                 self.__log(
-                    f'step: {current_step_in_set:3.0f}/{steps:3.0f}, completed: {current_step_in_set / steps * 100:3.0f}%, loss: {loss.numpy():7.2f}, dhr(x): {dxhr.numpy():4.2f}, dsr(x): {dxsr.numpy():4.2f}, content loss: {content_loss.numpy():7.2f}, generator loss: {gen_loss.numpy():4.2f}, discriminator loss: {disc_loss.numpy():4.2f}, psnr: {psnr.numpy():5.2f}, ssim: {ssim.numpy():4.2f}, glr: {gen_lr.numpy():.10f}, dlr: {disc_lr.numpy():.10f}', indent_level=1, end='\n', flush=True)
+                    f'step: {current_step_in_set:3.0f}/{steps:3.0f}, completed: {current_step_in_set / steps * 100:3.0f}%, loss: {loss.numpy():8.6f}, dhr(x): {dxhr.numpy():4.2f}, dsr(x): {dxsr.numpy():4.2f}, pixel loss: {pixel_loss.numpy():8.6f}, perceptual loss: {perceptual_loss.numpy():8.6f}, generator loss: {gen_loss.numpy():6.4f}, discriminator loss: {disc_loss.numpy():6.4f}, psnr: {psnr.numpy():5.2f}, ssim: {ssim.numpy():4.2f}, glr: {gen_lr.numpy():.10f}, dlr: {disc_lr.numpy():.7f}', indent_level=1, end='\n', flush=True)
 
                 checkpoint.step.assign_add(1)
 
-            checkpoint_manager.save()
+            if current_epoch > 0 and (current_epoch + 1) % 10 == 0:
+                checkpoint_manager.save()
 
             self.__log('')
 
     def restore(self):
         """Restores the latest checkpoint if it exists."""
 
-        if self.checkpoint_manager.latest_checkpoint:
-            self.checkpoint.restore(
-                self.checkpoint_manager.latest_checkpoint)
-            print(
-                f'generator restored at step: {self.checkpoint.step.numpy()}.')
+        checkpoint = self.checkpoint
+        manager = self.checkpoint_manager
+
+        if manager.latest_checkpoint:
+            checkpoint.restore(manager.latest_checkpoint)
+            print(f'model restored at step: {checkpoint.step.numpy()}.')
 
     @tf.function
     def __train_step(self, low_res_img, high_res_img):
@@ -110,54 +117,57 @@ class SrganTrainer:
             The loss.
         """
 
+        checkpoint = self.checkpoint
+
+        generator = checkpoint.generator
+        discriminator = checkpoint.discriminator
+
+        gen_opt = checkpoint.generator_optimizer
+        disc_opt = checkpoint.discriminator_optimizer
+
+        vgg = self.vgg
+        vgg_layer_weights = self.vgg_layer_weights
+
         with tf.GradientTape() as gen_tape, tf.GradientTape() as disc_tape:
-            low_res_img = tf.cast(low_res_img, tf.float32)
-            high_res_img = tf.cast(high_res_img, tf.float32)
+            # low_res_img = tf.cast(low_res_img, tf.float32)
+            # high_res_img = tf.cast(high_res_img, tf.float32)
 
-            super_res_img = self.checkpoint.generator(
-                low_res_img, training=True)
+            super_res_img = generator(low_res_img, training=True)
 
-            disc_out_hr = self.checkpoint.discriminator(
-                high_res_img, training=True)
-            disc_out_sr = self.checkpoint.discriminator(
-                super_res_img, training=True)
+            disc_out_hr = discriminator(high_res_img, training=True)
+            disc_out_sr = discriminator(super_res_img, training=True)
 
-            gen_loss = compute_generator_loss(disc_out_sr)
+            gen_loss = compute_generator_loss(disc_out_sr) * 1e-3
             disc_loss = compute_discriminator_loss(disc_out_hr, disc_out_sr)
 
-            content_loss = compute_content_loss(
-                high_res_img, super_res_img, self.vgg, self.vgg_layer_weights, feature_scale=1 / 12.75)
+            denorm_hr = (high_res_img * 127.5) + self.rgb_mean
+            denorm_sr = (super_res_img * 127.5) + self.rgb_mean
 
-            loss = content_loss + gen_loss * 1000
+            pixel_loss = compute_pixel_loss(high_res_img, super_res_img)
+            perceptual_loss = compute_perceptual_loss(denorm_hr, denorm_sr, vgg, vgg_layer_weights, feature_scale=1 / 12.75) / 100000
+            
+            content_loss = pixel_loss * 0.5 + perceptual_loss * 0.5
+            loss = content_loss + gen_loss
 
-            dxhr = tf.reduce_mean(disc_out_hr)
-            dxsr = tf.reduce_mean(disc_out_sr)
+        gen_vars = generator.trainable_variables
+        disc_vars = discriminator.trainable_variables
 
-            psnr = compute_psnr(high_res_img, super_res_img)
-            ssim = compute_ssim(high_res_img, super_res_img)
+        gen_grads = gen_tape.gradient(loss, gen_vars)
+        disc_grads = disc_tape.gradient(disc_loss, disc_vars)
 
-            gen_lr = self.generator_optimizer.lr
-            disc_lr = self.discriminator_optimizer.lr
+        gen_mapped_grads = zip(gen_grads, gen_vars)
+        disc_mapped_grads = zip(disc_grads, disc_vars)
 
-        gen_vars = self.checkpoint.generator.trainable_variables
-        disc_vars = self.checkpoint.discriminator.trainable_variables
+        gen_opt.apply_gradients(gen_mapped_grads)
+        disc_opt.apply_gradients(disc_mapped_grads)
+        
+        dxhr = tf.reduce_mean(disc_out_hr)
+        dxsr = tf.reduce_mean(disc_out_sr)
 
-        gen_grads = gen_tape.gradient(
-            loss, gen_vars)
-        disc_grads = disc_tape.gradient(
-            disc_loss, disc_vars)
+        psnr = compute_psnr(denorm_hr, denorm_sr)
+        ssim = compute_ssim(denorm_hr, denorm_sr)
 
-        gen_mapped_grads = zip(
-            gen_grads, gen_vars)
-        disc_mapped_grads = zip(
-            disc_grads, disc_vars)
-
-        self.checkpoint.generator_optimizer.apply_gradients(
-            gen_mapped_grads)
-        self.checkpoint.discriminator_optimizer.apply_gradients(
-            disc_mapped_grads)
-
-        return loss, dxhr, dxsr, content_loss, gen_loss, disc_loss, psnr, ssim, gen_lr, disc_lr
+        return loss, dxhr, dxsr, pixel_loss, perceptual_loss, gen_loss, disc_loss, psnr, ssim, gen_opt.lr, disc_opt.lr
 
     def __log(self, message, indent_level=0, end='\n', flush=False):
         """Prints the specified message to the console.

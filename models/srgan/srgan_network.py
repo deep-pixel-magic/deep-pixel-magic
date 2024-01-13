@@ -29,13 +29,13 @@ class SrganNetwork:
         shape = (None, None, 3)
 
         x_in = Input(shape=shape)
-        x = Lambda(self.__normalize())(x_in)
+        # x = Lambda(self.__normalize())(x_in)
 
-        x = Conv2D(num_filters, kernel_size=9, padding='same')(x)
+        x = Conv2D(num_filters, kernel_size=9, padding='same')(x_in)
         x = x_pre_res = PReLU(shared_axes=[1, 2])(x)
 
         for _ in range(num_residual_blocks):
-            x = self.__residual_block(x, num_filters)
+            x = self.__residual_block(x, num_filters, use_batch_normalization=use_batch_normalization)
 
         x = Conv2D(num_filters, kernel_size=3, padding='same')(x)
 
@@ -48,7 +48,7 @@ class SrganNetwork:
         x = self.__upsample_deconvolution(x, num_filters * 4, factor=2)
 
         x = Conv2D(3, kernel_size=9, padding='same', activation='tanh')(x)
-        x = Lambda(self.__denormalize())(x)
+        # x = Lambda(self.__denormalize())(x)
 
         return Model(x_in, x)
 

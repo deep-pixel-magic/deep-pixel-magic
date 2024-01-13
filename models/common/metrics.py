@@ -13,7 +13,7 @@ def compute_psnr(high_res_img, super_res_img):
         The PSNR.
     """
 
-    batched_psnr = tf.image.psnr(high_res_img, super_res_img, max_val=255)
+    batched_psnr = tf.image.psnr(high_res_img, super_res_img, max_val=255.0)
     return tf.reduce_mean(batched_psnr)
 
 

@@ -4,13 +4,14 @@ import tensorflow.keras.backend as K
 from tensorflow.keras.applications.vgg19 import preprocess_input
 
 
+# compute_mean_squared_error = tf.keras.losses.MeanSquaredError(reduction=tf.keras.losses.Reduction.SUM)
 compute_mean_squared_error = tf.keras.losses.MeanSquaredError()
 compute_binary_cross_entropy = tf.keras.losses.BinaryCrossentropy(
     from_logits=False)
 
 
 @tf.function
-def compute_content_loss(high_res_img, super_res_img, vgg_model, vgg_layer_weights, feature_scale=1 / 12.75):
+def compute_perceptual_loss(high_res_img, super_res_img, vgg_model, vgg_layer_weights, feature_scale=1 / 12.75):
     """Calculates the content loss of the super resolution image using the keras VGG model.
 
     Args:
@@ -46,6 +47,12 @@ def compute_euclidean_distance(high_res_features, super_res_features, vgg_layer_
     Returns:
         The average euclidean distance across all layers.
     """
+
+    if len(high_res_features) != len(super_res_features):
+        raise ValueError(f'high resolution features and super resolution features must have the same length: {len(high_res_features)} != {len(super_res_features)}')
+    
+    if len(high_res_features) != len(vgg_layer_weights):
+        raise ValueError(f'high resolution features and VGG layer weights must have the same length: {len(high_res_features)} != {len(vgg_layer_weights)}')
 
     loss = 0
 

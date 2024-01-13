@@ -2,24 +2,21 @@ import tensorflow as tf
 from tensorflow.data import AUTOTUNE
 
 
-class TensorflowDataset:
+class TensorflowImageDataset:
 
-    def __init__(self, low_res_dir, high_res_dir):
+    def __init__(self, directory, normalizer=None):
         """Constructor.
 
         Args:
             directory: The directory containing the images.
         """
 
-        self.low_res_dir = low_res_dir
-        self.high_res_dir = high_res_dir
-
-        self.dataset = self.__load()
+        self.__dataset = self.__dataset_from(directory, normalizer)
 
     def batched(self, batch_size=16):
         """Returns a batched version of the dataset."""
 
-        return self.dataset.batch(batch_size)
+        return self.__dataset.batch(batch_size)
 
     def rgb_mean(self):
         """Returns the mean of the RGB values of the images."""
@@ -30,9 +27,9 @@ class TensorflowDataset:
 
         samples = 0
 
-        for _, hr_img in self.dataset:
+        for _, img in self.__dataset:
 
-            image = tf.image.convert_image_dtype(hr_img, tf.float32)
+            image = tf.image.convert_image_dtype(img, tf.float32)
 
             sum_red += tf.reduce_sum(image[:, :, 0])
             sum_green += tf.reduce_sum(image[:, :, 1])
@@ -47,18 +44,13 @@ class TensorflowDataset:
 
         return sum_red.numpy(), sum_green.numpy(), sum_blue.numpy()
 
+    def dataset(self):
+        return self.__dataset
+
     def num(self):
-        return self.dataset.cardinality().numpy()
+        return self.__dataset.cardinality().numpy()
 
-    def __load(self):
-        """Preprocesses the images."""
-
-        low_res_dataset = self.__dataset_from(self.low_res_dir)
-        high_res_dataset = self.__dataset_from(self.high_res_dir)
-
-        return tf.data.Dataset.zip(low_res_dataset, high_res_dataset)
-
-    def __dataset_from(self, directory):
+    def __dataset_from(self, directory, normalizer=None):
         """Creates a dataset from the images in the specified directory.
 
         Args:
@@ -69,19 +61,47 @@ class TensorflowDataset:
         """
 
         glob = tf.io.gfile.glob(directory + "/*.png")
-        img_files = sorted(glob)
+        files = sorted(glob)
 
-        data_set = tf.data.Dataset.from_tensor_slices(img_files)
-        data_set = data_set.map(tf.io.read_file)
-        data_set = data_set.map(lambda x: tf.image.decode_png(
-            x, channels=3), num_parallel_calls=AUTOTUNE)
+        dataset = tf.data.Dataset.from_tensor_slices(files)
+        dataset = dataset.map(lambda x: tf.io.read_file(x), num_parallel_calls=AUTOTUNE)
+        dataset = dataset.map(lambda x: tf.image.decode_png(x, channels=3), num_parallel_calls=AUTOTUNE)
+        dataset = dataset.map(lambda x: tf.cast(x, tf.float32), num_parallel_calls=AUTOTUNE)
 
-        return data_set
+        if normalizer is not None:
+            dataset = dataset.map(normalizer, num_parallel_calls=AUTOTUNE)
+
+        return dataset
+    
+class TensorflowImageDatasetBundle:
+
+    def __init__(self, dataset_lr: TensorflowImageDataset, dataset_hr: TensorflowImageDataset):
+        """Constructor.
+
+        Args:
+            dataset_lr: The low resolution dataset.
+            dataset_hr: The high resolution dataset.
+        """
+
+        self.__dataset_lr = dataset_lr
+        self.__dataset_hr = dataset_hr
+
+        if dataset_lr.num() != dataset_hr.num():
+            raise ValueError('The number of samples in the low resolution and high resolution datasets must be the same.')
+
+        self.__dataset = tf.data.Dataset.zip((dataset_lr.dataset(), dataset_hr.dataset()))
+    
+    def dataset(self):
+        return self.__dataset
+    
+    def num(self):
+        return self.__dataset_lr.num()
+    
 
 
-class TensorflowPreprocessor:
+class TensorflowImagePreprocessor:
 
-    def __init__(self, dataset: TensorflowDataset):
+    def __init__(self, dataset: TensorflowImageDatasetBundle):
         """Constructor.
 
         Args:
@@ -94,7 +114,7 @@ class TensorflowPreprocessor:
         """Preprocesses the images."""
 
         num = self.dataset.num()
-        dataset = self.dataset.dataset
+        dataset = self.dataset.dataset()
 
         crop_operator = RandomCropOperator(crop_size, scale)
         flip_operator = RandomFlipOperator()
@@ -162,12 +182,3 @@ class RandomRotateOperator:
     def __call__(self, low_res_img, high_res_img):
         rn = tf.random.uniform(shape=(), maxval=4, dtype=tf.int32)
         return tf.image.rot90(low_res_img, rn), tf.image.rot90(high_res_img, rn)
-
-
-class NormalizationOperator:
-
-    def __init__(self, mean):
-        self.mean = mean
-
-    def __call__(self, low_res_img, high_res_img):
-        return (low_res_img - self.mean) / 127.5, (high_res_img - self.mean) / 127.5

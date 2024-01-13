@@ -11,13 +11,13 @@ from tensorflow.keras.applications.vgg19 import preprocess_input
 
 from models.vgg.vgg import VggBuilder
 from models.common.metrics import compute_psnr, compute_ssim
-from models.common.losses import compute_pixel_loss, compute_content_loss
+from models.common.losses import compute_pixel_loss, compute_perceptual_loss
 
 
 class EdsrNetworkTrainer:
     """A helper class for training an EDSR model."""
 
-    def __init__(self, model, learning_rate=1e-4, use_content_loss=False):
+    def __init__(self, model, learning_rate=1e-4, use_content_loss=False, strategy=None):
         """Constructor.
 
         Args:
@@ -27,6 +27,7 @@ class EdsrNetworkTrainer:
         """
 
         self.use_content_loss = use_content_loss
+        self.strategy = strategy
 
         if use_content_loss:
             self.vgg_layers = ['block1_conv2', 'block2_conv2',
@@ -149,7 +150,7 @@ class EdsrNetworkTrainer:
             loss_value = 0
 
             if self.use_content_loss:
-                loss_value = compute_content_loss(
+                loss_value = compute_perceptual_loss(
                     high_res_img,
                     super_res_img,
                     self.vgg,
@@ -163,16 +164,18 @@ class EdsrNetworkTrainer:
             psnr = compute_psnr(high_res_img, super_res_img)
             ssim = compute_ssim(high_res_img, super_res_img)
 
-            lr = optimizer.lr
-
         variables = self.checkpoint.model.trainable_variables
 
         gradients = tape.gradient(loss, variables)
-        mapped_gradients = zip(gradients, variables)
 
+        if self.strategy:
+            gradients = self.strategy.reduce(tf.distribute.ReduceOp.SUM, gradients, axis=None)
+            # gradients = [self.strategy.reduce(tf.distribute.ReduceOp.MEAN, grad, axis=None) for grad in gradients]
+
+        mapped_gradients = zip(gradients, variables)
         optimizer.apply_gradients(mapped_gradients)
 
-        return loss, psnr, ssim, lr
+        return loss, psnr, ssim, optimizer.lr
 
     def __log(self, message, indent_level=0, end='\n', flush=False):
         """Prints the specified message to the console.
