@@ -3,6 +3,8 @@ import tensorflow as tf
 
 from tensorflow.keras import optimizers
 
+from models.srgan.data_processing import denormalize_output
+
 from models.vgg.vgg import VggBuilder
 from models.common.losses import compute_pixel_loss, compute_perceptual_loss, compute_generator_loss, compute_discriminator_loss
 from models.common.metrics import compute_psnr, compute_ssim
@@ -11,7 +13,7 @@ from models.common.metrics import compute_psnr, compute_ssim
 class SrganTrainer:
     """A helper class for training an SRGAN model."""
 
-    def __init__(self, generator, discriminator, generator_lr=1e-4, discriminator_lr=1e-4, rgb_mean=np.array([0.4488, 0.4371, 0.4040]) * 255):
+    def __init__(self, generator, discriminator, generator_lr=1e-4, discriminator_lr=1e-4):
         """Constructor.
 
         Args:
@@ -20,14 +22,12 @@ class SrganTrainer:
             learning_rate: The learning rate.
         """
 
-        self.rgb_mean = rgb_mean
+        # self.vgg_layers = ['block1_conv2', 'block2_conv2',
+        #                    'block3_conv4', 'block4_conv4', 'block5_conv4']
+        # self.vgg_layer_weights = [0.03125, 0.0625, 0.125, 0.25, 0.5]
 
-        self.vgg_layers = ['block1_conv2', 'block2_conv2',
-                           'block3_conv4', 'block4_conv4', 'block5_conv4']
-        self.vgg_layer_weights = [0.03125, 0.0625, 0.125, 0.25, 0.5]
-
-        # self.vgg_layers = ['block5_conv4']
-        # self.vgg_layer_weights = [1]
+        self.vgg_layers = ['block5_conv4']
+        self.vgg_layer_weights = [1.0]
 
         self.vgg = VggBuilder(layers=self.vgg_layers).build(
             input_shape=(None, None, 3))
@@ -74,11 +74,27 @@ class SrganTrainer:
 
             self.__log(f'epoch: {current_epoch + 1}/{epochs}')
 
+            average_loss = 0
+            average_pixel_loss = 0
+            average_perceptual_loss = 0
+            average_dxhr = 0
+            average_dxsr = 0
+            average_psnr = 0
+            average_ssim = 0
+
             for low_res_img, high_res_img in dataset.take(steps):
                 current_step = checkpoint.step.numpy()
 
                 loss, dxhr, dxsr, pixel_loss, perceptual_loss, gen_loss, disc_loss, psnr, ssim, gen_lr, disc_lr = self.__train_step(
                     low_res_img, high_res_img)
+                
+                average_loss += loss
+                average_pixel_loss += pixel_loss
+                average_perceptual_loss += perceptual_loss
+                average_dxhr += dxhr
+                average_dxsr += dxsr
+                average_psnr += psnr
+                average_ssim += ssim
 
                 if not np.any(performed_steps):
                     current_step_in_set = current_step + 1
@@ -86,13 +102,14 @@ class SrganTrainer:
                     current_step_in_set = current_step % performed_steps + 1
 
                 self.__log(
-                    f'step: {current_step_in_set:3.0f}/{steps:3.0f}, completed: {current_step_in_set / steps * 100:3.0f}%, loss: {loss.numpy():8.6f}, dhr(x): {dxhr.numpy():4.2f}, dsr(x): {dxsr.numpy():4.2f}, pixel loss: {pixel_loss.numpy():8.6f}, perceptual loss: {perceptual_loss.numpy():8.6f}, generator loss: {gen_loss.numpy():6.4f}, discriminator loss: {disc_loss.numpy():6.4f}, psnr: {psnr.numpy():5.2f}, ssim: {ssim.numpy():4.2f}, glr: {gen_lr.numpy():.10f}, dlr: {disc_lr.numpy():.7f}', indent_level=1, end='\n', flush=True)
+                    f'step: {current_step_in_set:3.0f}/{steps:3.0f}, completed: {current_step_in_set / steps * 100:3.0f}%, loss: {loss.numpy():8.6f}, d(x_hr): {dxhr.numpy():4.2f}, d(x_sr): {dxsr.numpy():4.2f}, pixel loss: {pixel_loss.numpy():8.6f}, perceptual loss: {perceptual_loss.numpy():8.6f}, generator loss: {gen_loss.numpy():6.4f}, discriminator loss: {disc_loss.numpy():6.4f}, psnr: {psnr.numpy():5.2f}, ssim: {ssim.numpy():4.2f}, glr: {gen_lr.numpy():.5f}, dlr: {disc_lr.numpy():.5f}', indent_level=1, end='\n', flush=True)
 
                 checkpoint.step.assign_add(1)
 
             if current_epoch > 0 and (current_epoch + 1) % 10 == 0:
                 checkpoint_manager.save()
 
+            self.__log(f'done: avg(loss): {average_loss / steps:8.6f}, avg(pixel_loss): {average_pixel_loss / steps:8.6f}, avg(perceptual_loss): {average_perceptual_loss / steps:8.6f} avg(d(x_hr)): {average_dxhr / steps:4.2f}, avg(d(x_sr)): {average_dxsr / steps:4.2f}, avg(psnr): {average_psnr / steps:5.2f}, avg(ssim): {average_ssim / steps:4.2f}', indent_level=1, end='\n', flush=True)
             self.__log('')
 
     def restore(self):
@@ -129,25 +146,20 @@ class SrganTrainer:
         vgg_layer_weights = self.vgg_layer_weights
 
         with tf.GradientTape() as gen_tape, tf.GradientTape() as disc_tape:
-            # low_res_img = tf.cast(low_res_img, tf.float32)
-            # high_res_img = tf.cast(high_res_img, tf.float32)
 
             super_res_img = generator(low_res_img, training=True)
 
             disc_out_hr = discriminator(high_res_img, training=True)
             disc_out_sr = discriminator(super_res_img, training=True)
 
-            gen_loss = compute_generator_loss(disc_out_sr) * 1e-3
             disc_loss = compute_discriminator_loss(disc_out_hr, disc_out_sr)
-
-            denorm_hr = (high_res_img * 127.5) + self.rgb_mean
-            denorm_sr = (super_res_img * 127.5) + self.rgb_mean
+            gen_loss = compute_generator_loss(disc_out_sr)
 
             pixel_loss = compute_pixel_loss(high_res_img, super_res_img)
-            perceptual_loss = compute_perceptual_loss(denorm_hr, denorm_sr, vgg, vgg_layer_weights, feature_scale=1 / 12.75) / 100000
-            
+            perceptual_loss = compute_perceptual_loss(high_res_img, super_res_img, vgg, vgg_layer_weights, feature_scale=1 / 12.75) / 500
+
             content_loss = pixel_loss * 0.5 + perceptual_loss * 0.5
-            loss = content_loss + gen_loss
+            loss = content_loss + gen_loss * 1e-3
 
         gen_vars = generator.trainable_variables
         disc_vars = discriminator.trainable_variables
@@ -163,6 +175,9 @@ class SrganTrainer:
         
         dxhr = tf.reduce_mean(disc_out_hr)
         dxsr = tf.reduce_mean(disc_out_sr)
+
+        denorm_hr = denormalize_output(high_res_img)
+        denorm_sr = denormalize_output(super_res_img)
 
         psnr = compute_psnr(denorm_hr, denorm_sr)
         ssim = compute_ssim(denorm_hr, denorm_sr)

@@ -3,15 +3,16 @@ import tensorflow as tf
 
 from tensorflow.keras import optimizers
 
-from models.vgg.vgg import VggBuilder
-from models.common.losses import compute_perceptual_loss, compute_pixel_loss, compute_discriminator_loss
+from models.srgan.data_processing import denormalize_output
+
+from models.common.losses import compute_pixel_loss, compute_discriminator_loss
 from models.common.metrics import compute_psnr, compute_ssim
 
 
 class SrganPreTrainer:
     """A helper class for training an SRGAN model."""
 
-    def __init__(self, generator, learning_rate=1e-4, rgb_mean=np.array([0.4488, 0.4371, 0.4040]) * 255):
+    def __init__(self, generator, learning_rate=1e-4):
         """Constructor.
 
         Args:
@@ -20,8 +21,6 @@ class SrganPreTrainer:
             learning_rate: The learning rate.
         """
         
-        self.rgb_mean = rgb_mean
-
         self.generator_optimizer = optimizers.Adam(learning_rate)
 
         self.checkpoint = tf.train.Checkpoint(step=tf.Variable(0),
@@ -62,6 +61,8 @@ class SrganPreTrainer:
             self.__log(f'epoch: {current_epoch + 1}/{epochs}')
 
             average_loss = 0
+            average_psnr = 0
+            average_ssim = 0
 
             for low_res_img, high_res_img in dataset.take(steps):
                 current_step = checkpoint.step.numpy()
@@ -70,6 +71,8 @@ class SrganPreTrainer:
                     low_res_img, high_res_img)
                 
                 average_loss += loss
+                average_psnr += psnr
+                average_ssim += ssim
 
                 if not np.any(performed_steps):
                     current_step_in_set = current_step + 1
@@ -88,7 +91,7 @@ class SrganPreTrainer:
                 checkpoint_manager.save()
 
             self.__log(
-                f'done: average loss: {average_loss / steps:.2f}', indent_level=1, end='\n', flush=True)
+                f'done: avg(loss): {average_loss / steps:8.6f}, avg(psnr): {average_psnr / steps:5.2f}, avg(ssim): {average_ssim / steps:4.2f}', indent_level=1, end='\n', flush=True)
             self.__log('')
 
     def restore(self):
@@ -118,9 +121,6 @@ class SrganPreTrainer:
         optimizer = checkpoint.generator_optimizer
 
         with tf.GradientTape() as gen_tape:
-            # low_res_img = tf.cast(low_res_img, tf.float32)
-            # high_res_img = tf.cast(high_res_img, tf.float32)
-
             super_res_img = generator(low_res_img, training=True)
             loss = compute_pixel_loss(high_res_img, super_res_img)
 
@@ -130,14 +130,11 @@ class SrganPreTrainer:
 
         optimizer.apply_gradients(gen_mapped_grads)
         
-        denorm_hr = (high_res_img * 127.5) + self.rgb_mean
-        denorm_sr = (super_res_img * 127.5) + self.rgb_mean
+        denorm_hr = denormalize_output(high_res_img)
+        denorm_sr = denormalize_output(super_res_img)
 
         psnr = compute_psnr(denorm_hr, denorm_sr)
         ssim = compute_ssim(denorm_hr, denorm_sr)
-
-        # psnr = compute_psnr(high_res_img, super_res_img)
-        # ssim = compute_ssim(high_res_img, super_res_img)
 
         return loss, psnr, ssim, optimizer.lr
 

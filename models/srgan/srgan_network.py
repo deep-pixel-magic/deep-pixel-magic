@@ -18,7 +18,7 @@ class SrganNetwork:
 
         self.rgb_mean = np.array([0.4488, 0.4371, 0.4040]) * 255
 
-    def build(self, num_filters=64, num_residual_blocks=16, use_batch_normalization=True):
+    def build(self, num_filters=64, num_residual_blocks=16, trainable=True):
         """Builds the actual SRGAN model.
 
         Args:
@@ -29,30 +29,27 @@ class SrganNetwork:
         shape = (None, None, 3)
 
         x_in = Input(shape=shape)
-        # x = Lambda(self.__normalize())(x_in)
-
         x = Conv2D(num_filters, kernel_size=9, padding='same')(x_in)
         x = x_pre_res = PReLU(shared_axes=[1, 2])(x)
 
         for _ in range(num_residual_blocks):
-            x = self.__residual_block(x, num_filters, use_batch_normalization=use_batch_normalization)
+            x = self.__residual_block(x, num_filters, trainable=trainable)
 
         x = Conv2D(num_filters, kernel_size=3, padding='same')(x)
-
-        if use_batch_normalization:
-            x = BatchNormalization()(x)
-
+        x = BatchNormalization(trainable=trainable)(x)
         x = Add()([x_pre_res, x])
 
-        x = self.__upsample_deconvolution(x, num_filters * 4, factor=2)
-        x = self.__upsample_deconvolution(x, num_filters * 4, factor=2)
+        x = self.__upsample_pixel_shuffle(x, num_filters * 4, factor=2)
+        x = self.__upsample_pixel_shuffle(x, num_filters * 4, factor=2)
 
         x = Conv2D(3, kernel_size=9, padding='same', activation='tanh')(x)
-        # x = Lambda(self.__denormalize())(x)
 
-        return Model(x_in, x)
+        model = Model(x_in, x)
+        model.trainable = trainable
 
-    def __residual_block(self, x_in, num_filters, use_batch_normalization=True, momentum=0.8):
+        return model
+
+    def __residual_block(self, x_in, num_filters, momentum=0.8, trainable=True):
         """Creates a residual block.
 
         Args:
@@ -65,17 +62,11 @@ class SrganNetwork:
         """
 
         x = Conv2D(num_filters, kernel_size=3, padding='same')(x_in)
-
-        if use_batch_normalization:
-            x = BatchNormalization(momentum=momentum)(x)
-
+        x = BatchNormalization(momentum=momentum, trainable=trainable)(x)
         x = PReLU(shared_axes=[1, 2])(x)
 
         x = Conv2D(num_filters, kernel_size=3, padding='same')(x)
-
-        if use_batch_normalization:
-            x = BatchNormalization(momentum=momentum)(x)
-
+        x = BatchNormalization(momentum=momentum, trainable=trainable)(x)
         x = Add()([x_in, x])
 
         return x
@@ -106,7 +97,7 @@ class SrganNetwork:
 
         return x
 
-    def __upsample_pixel_shuffle(self, x_in, num_filters):
+    def __upsample_pixel_shuffle(self, x_in, num_filters, factor):
         """Upsamples the input using sub-pixel convolution.
 
         Args:
@@ -118,7 +109,7 @@ class SrganNetwork:
         """
 
         x = Conv2D(num_filters, kernel_size=3, padding='same')(x_in)
-        x = Lambda(self.__pixel_shuffle(scale=2))(x)
+        x = Lambda(self.__pixel_shuffle(scale=factor))(x)
         x = PReLU(shared_axes=[1, 2])(x)
 
         return x
@@ -134,19 +125,3 @@ class SrganNetwork:
         """
 
         return lambda x: tf.nn.depth_to_space(x, scale)
-
-    def __normalize(self):
-        """Normalizes the input.
-
-        Assumes an input interval of [0, 255].
-        """
-
-        return lambda x: (x - self.rgb_mean) / 127.5
-
-    def __denormalize(self):
-        """Denormalizes the input.
-
-        Assumes a normalized input interval of [0, 1].
-        """
-
-        return lambda x: x * 127.5 + self.rgb_mean

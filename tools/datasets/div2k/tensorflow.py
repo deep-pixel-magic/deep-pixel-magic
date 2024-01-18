@@ -120,11 +120,13 @@ class TensorflowImagePreprocessor:
         flip_operator = RandomFlipOperator()
         rotate_operator = RandomRotateOperator()
 
+        dataset = dataset.cache()
+        dataset = dataset.shuffle(buffer_size=num)
+
         dataset = dataset.map(crop_operator, num_parallel_calls=AUTOTUNE)
         dataset = dataset.map(flip_operator, num_parallel_calls=AUTOTUNE)
         dataset = dataset.map(rotate_operator, num_parallel_calls=AUTOTUNE)
 
-        dataset = dataset.shuffle(buffer_size=num)
         dataset = dataset.batch(batch_size)
         dataset = dataset.repeat()
         dataset = dataset.prefetch(buffer_size=AUTOTUNE)

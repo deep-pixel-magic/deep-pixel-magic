@@ -16,3 +16,6 @@ def normalize_img(img, mean):
 
 def denormalize_img(img, mean):
     return (img * 127.5) + mean
+
+def denormalize_other(img):
+    return (img + 1.0) * 127.5
