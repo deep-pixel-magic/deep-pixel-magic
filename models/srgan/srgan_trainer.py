@@ -1,3 +1,7 @@
+import os
+import csv
+from datetime import datetime
+
 import numpy as np
 import tensorflow as tf
 
@@ -68,49 +72,84 @@ class SrganTrainer:
             self.__log(f'epochs completed: {performed_epochs}/{epochs}')
             self.__log(f'epochs to run: {epochs_to_run}')
 
-        for _ in range(epochs_to_run):
-            current_epoch = checkpoint.step.numpy() // steps
-            performed_steps = steps * current_epoch
+        now = datetime.today().strftime('%Y-%m-%d_%H-%M-%S')
+        csv_file = f'./.cache/logs/srgan/{now}.csv'
 
-            self.__log(f'epoch: {current_epoch + 1}/{epochs}')
+        os.makedirs(os.path.dirname(csv_file), exist_ok=True)
 
-            average_loss = 0
-            average_pixel_loss = 0
-            average_perceptual_loss = 0
-            average_dxhr = 0
-            average_dxsr = 0
-            average_psnr = 0
-            average_ssim = 0
+        with open(csv_file, 'w') as log_file:
+            log_writer = csv.writer(log_file, delimiter=',')
+            log_writer.writerow(['epoch', 'step', 'loss', 'loss_mse', 'loss_vgg',
+                                'loss_g', 'loss_d', 'd_x_hr', 'd_x_sr', 'psnr', 'ssim'])
 
-            for low_res_img, high_res_img in dataset.take(steps):
-                current_step = checkpoint.step.numpy()
+            for _ in range(epochs_to_run):
+                current_epoch = checkpoint.step.numpy() // steps
+                performed_steps = steps * current_epoch
 
-                loss, dxhr, dxsr, pixel_loss, perceptual_loss, gen_loss, disc_loss, psnr, ssim, gen_lr, disc_lr = self.__train_step(
-                    low_res_img, high_res_img)
-                
-                average_loss += loss
-                average_pixel_loss += pixel_loss
-                average_perceptual_loss += perceptual_loss
-                average_dxhr += dxhr
-                average_dxsr += dxsr
-                average_psnr += psnr
-                average_ssim += ssim
+                self.__log(f'epoch: {current_epoch + 1}/{epochs}')
 
-                if not np.any(performed_steps):
-                    current_step_in_set = current_step + 1
-                else:
-                    current_step_in_set = current_step % performed_steps + 1
+                avg_loss = 0
+                avg_loss_mse = 0
+                avg_loss_vgg = 0
+                avg_loss_g = 0
+                avg_loss_d = 0
 
-                self.__log(
-                    f'step: {current_step_in_set:3.0f}/{steps:3.0f}, completed: {current_step_in_set / steps * 100:3.0f}%, loss: {loss.numpy():8.6f}, d(x_hr): {dxhr.numpy():4.2f}, d(x_sr): {dxsr.numpy():4.2f}, pixel loss: {pixel_loss.numpy():8.6f}, perceptual loss: {perceptual_loss.numpy():8.6f}, generator loss: {gen_loss.numpy():6.4f}, discriminator loss: {disc_loss.numpy():6.4f}, psnr: {psnr.numpy():5.2f}, ssim: {ssim.numpy():4.2f}, glr: {gen_lr.numpy():.5f}, dlr: {disc_lr.numpy():.5f}', indent_level=1, end='\n', flush=True)
+                avg_d_x_hr = 0
+                avg_d_x_sr = 0
 
-                checkpoint.step.assign_add(1)
+                avg_psnr = 0
+                avg_ssim = 0
 
-            if current_epoch > 0 and (current_epoch + 1) % 10 == 0:
-                checkpoint_manager.save()
+                for low_res_img, high_res_img in dataset.take(steps):
+                    current_step = checkpoint.step.numpy()
 
-            self.__log(f'done: avg(loss): {average_loss / steps:8.6f}, avg(pixel_loss): {average_pixel_loss / steps:8.6f}, avg(perceptual_loss): {average_perceptual_loss / steps:8.6f} avg(d(x_hr)): {average_dxhr / steps:4.2f}, avg(d(x_sr)): {average_dxsr / steps:4.2f}, avg(psnr): {average_psnr / steps:5.2f}, avg(ssim): {average_ssim / steps:4.2f}', indent_level=1, end='\n', flush=True)
-            self.__log('')
+                    loss, loss_mse, loss_vgg, loss_g, loss_d, d_x_hr, d_x_sr, psnr, ssim = self.__train_step(
+                        low_res_img, high_res_img)
+
+                    avg_loss += loss
+                    avg_loss_mse += loss_mse
+                    avg_loss_vgg += loss_vgg
+                    avg_loss_g += loss_g
+                    avg_loss_d += loss_d
+
+                    avg_d_x_hr += d_x_hr
+                    avg_d_x_sr += d_x_sr
+
+                    avg_psnr += psnr
+                    avg_ssim += ssim
+
+                    if not np.any(performed_steps):
+                        current_step_in_set = current_step + 1
+                    else:
+                        current_step_in_set = current_step % performed_steps + 1
+
+                    log_writer.writerow([current_epoch + 1, current_step + 1, loss.numpy(), loss_mse.numpy(), loss_vgg.numpy(
+                    ), loss_g.numpy(), loss_d.numpy(), d_x_hr.numpy(), d_x_sr.numpy(), psnr.numpy(), ssim.numpy()])
+                    log_file.flush()
+
+                    self.__log(
+                        f'step: {current_step_in_set:3.0f}/{steps:3.0f}, completed: {current_step_in_set / steps * 100:3.0f}%, loss: {loss.numpy():8.6f}, loss_mse(g): {loss_mse.numpy():8.6f}, loss_vgg(g): {loss_vgg.numpy():8.6f}, loss_bce(g): {loss_g.numpy():6.4f}, loss_bce(d): {loss_d.numpy():6.4f}, d(x_hr): {d_x_hr.numpy():4.2f}, d(x_sr): {d_x_sr.numpy():4.2f}, psnr(y): {psnr.numpy():5.2f}, ssim(y): {ssim.numpy():4.2f}', indent_level=1, end='\n', flush=True)
+
+                    checkpoint.step.assign_add(1)
+
+                if current_epoch > 0 and (current_epoch + 1) % 10 == 0:
+                    checkpoint_manager.save()
+
+                avg_loss /= steps
+                avg_loss_mse /= steps
+                avg_loss_vgg /= steps
+                avg_loss_g /= steps
+                avg_loss_d /= steps
+
+                avg_d_x_hr /= steps
+                avg_d_x_sr /= steps
+
+                avg_psnr /= steps
+                avg_ssim /= steps
+
+                self.__log('-' * 195, indent_level=1, end='\n', flush=True)
+                self.__log(f'done: {"".rjust(25, " ")} loss: {avg_loss:8.6f}, loss_mse(g): {avg_loss_mse:8.6f}, loss_vgg(g): {avg_loss_vgg:8.6f}, loss_bce(g): {avg_loss_g:6.4f}, loss_bce(d): {avg_loss_d:6.4f}, d(x_hr): {avg_d_x_hr:4.2f}, d(x_sr): {avg_d_x_sr:4.2f}, psnr(y): {avg_psnr:5.2f}, ssim(y): {avg_ssim:4.2f}', indent_level=1, end='\n', flush=True)
+                self.__log('')
 
     def restore(self):
         """Restores the latest checkpoint if it exists."""
@@ -149,32 +188,33 @@ class SrganTrainer:
 
             super_res_img = generator(low_res_img, training=True)
 
-            disc_out_hr = discriminator(high_res_img, training=True)
-            disc_out_sr = discriminator(super_res_img, training=True)
+            disc_pred_hr = discriminator(high_res_img, training=True)
+            disc_pred_sr = discriminator(super_res_img, training=True)
 
-            disc_loss = compute_discriminator_loss(disc_out_hr, disc_out_sr)
-            gen_loss = compute_generator_loss(disc_out_sr)
+            loss_d = compute_discriminator_loss(disc_pred_hr, disc_pred_sr)
+            loss_g = compute_generator_loss(disc_pred_sr)
 
-            pixel_loss = compute_pixel_loss(high_res_img, super_res_img)
-            perceptual_loss = compute_perceptual_loss(high_res_img, super_res_img, vgg, vgg_layer_weights, feature_scale=1 / 12.75) / 500
+            loss_mse = compute_pixel_loss(high_res_img, super_res_img)
+            loss_vgg = compute_perceptual_loss(
+                high_res_img, super_res_img, vgg, vgg_layer_weights, feature_scale=1 / 12.75) / 500
 
-            content_loss = pixel_loss * 0.5 + perceptual_loss * 0.5
-            loss = content_loss + gen_loss * 1e-3
+            content_loss = loss_mse * 0.5 + loss_vgg * 0.5
+            loss = content_loss + loss_g * 1e-3
 
         gen_vars = generator.trainable_variables
         disc_vars = discriminator.trainable_variables
 
         gen_grads = gen_tape.gradient(loss, gen_vars)
-        disc_grads = disc_tape.gradient(disc_loss, disc_vars)
+        disc_grads = disc_tape.gradient(loss_d, disc_vars)
 
         gen_mapped_grads = zip(gen_grads, gen_vars)
         disc_mapped_grads = zip(disc_grads, disc_vars)
 
         gen_opt.apply_gradients(gen_mapped_grads)
         disc_opt.apply_gradients(disc_mapped_grads)
-        
-        dxhr = tf.reduce_mean(disc_out_hr)
-        dxsr = tf.reduce_mean(disc_out_sr)
+
+        d_x_hr = tf.reduce_mean(disc_pred_hr)
+        d_x_sr = tf.reduce_mean(disc_pred_sr)
 
         denorm_hr = denormalize_output(high_res_img)
         denorm_sr = denormalize_output(super_res_img)
@@ -182,7 +222,7 @@ class SrganTrainer:
         psnr = compute_psnr(denorm_hr, denorm_sr)
         ssim = compute_ssim(denorm_hr, denorm_sr)
 
-        return loss, dxhr, dxsr, pixel_loss, perceptual_loss, gen_loss, disc_loss, psnr, ssim, gen_opt.lr, disc_opt.lr
+        return loss, loss_mse, loss_vgg, loss_g, loss_d, d_x_hr, d_x_sr, psnr, ssim
 
     def __log(self, message, indent_level=0, end='\n', flush=False):
         """Prints the specified message to the console.

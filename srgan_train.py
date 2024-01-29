@@ -1,20 +1,19 @@
 import os
 import sys
-
 import tensorflow as tf
 
 from tensorflow.keras.optimizers.schedules import PiecewiseConstantDecay
 
-from models.srgan.srgan_network import SrganNetwork
+from models.srgan.data_processing import normalize_input_lr, normalize_input_hr
 from models.srgan.srgan_trainer import SrganTrainer
 from models.srgan.discriminator_network import SrganDiscriminatorNetwork
-from models.srgan.data_processing import normalize_input_lr, normalize_input_hr
+from models.srgan.srgan_network import SrganNetwork
 
 from tools.datasets.div2k.tensorflow import TensorflowImageDataset, TensorflowImageDatasetBundle, TensorflowImagePreprocessor
 
 
 def main():
-    with tf.device('/GPU:0'):
+    with tf.device('/GPU:2'):
 
         data_dir_low_res = "./.cache/data/DIV2K_train_LR_bicubic/X4"
         data_dir_high_res = "./.cache/data/DIV2K_train_HR"

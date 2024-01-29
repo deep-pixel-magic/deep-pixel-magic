@@ -1,10 +1,5 @@
 import tensorflow as tf
-import tensorflow.keras.backend as K
 
-from tensorflow.keras.applications.vgg19 import preprocess_input
-
-
-# compute_mean_squared_error = tf.keras.losses.MeanSquaredError(reduction=tf.keras.losses.Reduction.SUM)
 compute_mean_squared_error = tf.keras.losses.MeanSquaredError()
 compute_binary_cross_entropy = tf.keras.losses.BinaryCrossentropy(
     from_logits=False)
@@ -34,8 +29,11 @@ def compute_perceptual_loss(high_res_img, super_res_img, vgg_model, vgg_layer_we
     high_res_features = vgg_model(high_res_img_pp, training=False)
     super_res_features = vgg_model(super_res_img_pp, training=False)
 
-    # return compute_euclidean_distance(high_res_features, super_res_features, vgg_layer_weights, feature_scale)
+    if isinstance(high_res_features, list):
+        return compute_euclidean_distance_weighted(high_res_features, super_res_features, vgg_layer_weights, feature_scale)
+
     return compute_euclidean_distance(high_res_features, super_res_features, feature_scale)
+
 
 @tf.function
 def compute_euclidean_distance(high_res_features, super_res_features, feature_scale):
@@ -54,8 +52,10 @@ def compute_euclidean_distance(high_res_features, super_res_features, feature_sc
     scaled_high_res_features = high_res_features * feature_scale
     scaled_super_res_features = super_res_features * feature_scale
 
-    loss = tf.norm(scaled_high_res_features - scaled_super_res_features, ord='euclidean')
+    loss = tf.norm(scaled_high_res_features -
+                   scaled_super_res_features, ord='euclidean')
     return loss
+
 
 @tf.function
 def compute_euclidean_distance_weighted(high_res_features, super_res_features, vgg_layer_weights, feature_scale):
@@ -71,32 +71,19 @@ def compute_euclidean_distance_weighted(high_res_features, super_res_features, v
         The average euclidean distance across all layers.
     """
 
-    if len(high_res_features) != len(super_res_features):
-        raise ValueError(f'high resolution features and super resolution features must have the same length: {len(high_res_features)} != {len(super_res_features)}')
-    
-    if len(high_res_features) != len(vgg_layer_weights):
-        raise ValueError(f'high resolution features and VGG layer weights must have the same length: {len(high_res_features)} != {len(vgg_layer_weights)}')
-
     loss = 0
 
     for hr_features, sr_features, weight in zip(high_res_features, super_res_features, vgg_layer_weights):
         scaled_hr_features = hr_features * feature_scale
         scaled_sr_features = sr_features * feature_scale
 
-        # All of those are the same.
-
         euclidean_distance = tf.norm(
-            scaled_sr_features - scaled_hr_features, ord='euclidean')
-
-        # euclidean_distance = tf.sqrt(tf.reduce_sum(
-        #     tf.square(scaled_sr_features - scaled_hr_features)))
-
-        # euclidean_distance = K.sqrt(K.sum(K.square(scaled_sr_features -
-        #                                              scaled_hr_features)))
+            scaled_hr_features - scaled_sr_features, ord='euclidean')
 
         loss += euclidean_distance * weight
 
     return loss / len(vgg_layer_weights)
+
 
 @tf.function
 def compute_pixel_loss(high_res_img, super_res_img):

@@ -1,6 +1,5 @@
 import os
 import sys
-import numpy as np
 import tensorflow as tf
 
 from tensorflow.keras.optimizers.schedules import PiecewiseConstantDecay
@@ -8,8 +7,7 @@ from tensorflow.keras.optimizers.schedules import PiecewiseConstantDecay
 from models.srgan.srgan_network import SrganNetwork
 from models.srgan.discriminator_network import SrganDiscriminatorNetwork
 from models.srgan.srgan_trainer import SrganTrainer
-from models.srgan.srgan_pre_trainer import SrganPreTrainer
-from models.srgan.data_processing import normalize_input, denormalize_output
+from models.srgan.data_processing import normalize_input_lr, normalize_input_hr
 
 from tools.datasets.div2k.tensorflow import TensorflowImageDataset, TensorflowImageDatasetBundle, TensorflowImagePreprocessor
 
@@ -22,9 +20,9 @@ def main():
     crop_size = 96
 
     dataset_lr = TensorflowImageDataset(
-        data_dir_low_res, normalizer=lambda x: normalize_input(x))
+        data_dir_low_res, normalizer=lambda x: normalize_input_lr(x))
     dataset_hr = TensorflowImageDataset(
-        data_dir_high_res, normalizer=lambda x: normalize_input(x))
+        data_dir_high_res, normalizer=lambda x: normalize_input_hr(x))
 
     bundle = TensorflowImageDatasetBundle(dataset_lr, dataset_hr)
 
@@ -37,7 +35,7 @@ def main():
     num_steps_per_epoch = batched_data_set_cardinality
     num_epochs = 1000
 
-    with tf.device('/GPU:0'):
+    with tf.device('/GPU:2'):
 
         generator = SrganNetwork().build(num_filters=64, num_residual_blocks=16)
         discriminator = SrganDiscriminatorNetwork(img_res=crop_size).build()

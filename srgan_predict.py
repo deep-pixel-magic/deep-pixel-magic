@@ -4,7 +4,7 @@ import tensorflow as tf
 from PIL import Image
 
 from models.srgan.srgan_network import SrganNetwork
-from models.srgan.data_processing import normalize_input_lr, postprocess_output
+from models.srgan.data_processing import normalize_input_lr, normalize_input_hr, postprocess_output
 
 from tools.datasets.div2k import div2k
 from tools.datasets.div2k.image import Div2kImage
@@ -13,7 +13,7 @@ from tools.images.image import load_png
 
 
 def main():
-    img_id = 805
+    img_id = 869
 
     img_lr = load_png(
         f'./.cache/data/DIV2K_valid_LR_bicubic/X4/0{img_id}x4.png')
@@ -41,22 +41,6 @@ def main():
     img.load(img_id)
     img.scale(4)
     img.save('srgan.upsampled.png')
-
-    # figure, plots = plt.subplots(1, 3, sharex=True, sharey=True)
-
-    # figure.set_figwidth(15)
-    # figure.set_figheight(15)
-
-    # plots[0].imshow(img.get())
-    # plots[0].title.set_text('Upsampled')
-
-    # plots[1].imshow(predicted_img)
-    # plots[1].title.set_text('Prediction')
-
-    # plots[2].imshow(tf.squeeze(img_hr))
-    # plots[2].title.set_text('Original')
-
-    # plt.show()
 
 
 if __name__ == "__main__":
