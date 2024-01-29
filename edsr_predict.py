@@ -42,7 +42,7 @@ def main():
 
     img.load(img_id)
     img.scale(4)
-    img.save("upsampled.png")
+    img.save("edsr.upsampled.png")
 
     # figure, plots = plt.subplots(1, 3, sharex=True, sharey=True)
     # plots[0].imshow(img.get())
