@@ -27,15 +27,15 @@ def main():
 
         bundle = TensorflowImageDatasetBundle(dataset_lr, dataset_hr)
 
-        initial_data_set_cardinality = bundle.num()
-        batched_data_set_cardinality = initial_data_set_cardinality // batch_size
-
         dataset = TensorflowImagePreprocessor(bundle).preprocess(
             batch_size=batch_size,
             crop_size=crop_size,
             scale=4,
-            shuffle_buffer_size=batched_data_set_cardinality,
+            shuffle_buffer_size=batch_size,
             cache=False)
+
+        initial_data_set_cardinality = bundle.num()
+        batched_data_set_cardinality = initial_data_set_cardinality // batch_size
 
         num_steps_per_epoch = batched_data_set_cardinality
         num_epochs = 1000
