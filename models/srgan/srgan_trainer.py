@@ -26,10 +26,6 @@ class SrganTrainer:
             learning_rate: The learning rate.
         """
 
-        # self.vgg_layers = ['block1_conv2', 'block2_conv2',
-        #                    'block3_conv4', 'block4_conv4', 'block5_conv4']
-        # self.vgg_layer_weights = [0.03125, 0.0625, 0.125, 0.25, 0.5]
-
         self.vgg_layers = ['block5_conv4']
         self.vgg_layer_weights = [1.0]
 

@@ -20,6 +20,7 @@ def compute_perceptual_loss(high_res_img, super_res_img, vgg_model, vgg_layer_we
     high_res_copy = tf.identity(high_res_img)
     super_res_copy = tf.identity(super_res_img)
 
+    # Reverse channels from RGB to BGR
     high_res_img_pp = tf.reverse(high_res_copy, axis=[-1])
     super_res_img_pp = tf.reverse(super_res_copy, axis=[-1])
 

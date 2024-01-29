@@ -1,10 +1,10 @@
 import sys
-from models.edsr.data_processing import normalize_input, postprocess_output
 
 import tensorflow as tf
 from PIL import Image
 
 from models.edsr.edsr_network import EdsrNetwork
+from models.edsr.data_processing import normalize_input, postprocess_output
 
 from tools.datasets.div2k import div2k
 from tools.datasets.div2k.image import Div2kImage
@@ -28,7 +28,7 @@ def main():
     latest = tf.train.latest_checkpoint('./.cache/models/edsr')
     model.load_weights(latest)
 
-    prediction = model.predict(img_lr)
+    prediction = model.predict(img_lr_norm)
 
     predicted_img = tf.squeeze(prediction)
     predicted_img = postprocess_output(predicted_img)
@@ -43,18 +43,6 @@ def main():
     img.load(img_id)
     img.scale(4)
     img.save("edsr.upsampled.png")
-
-    # figure, plots = plt.subplots(1, 3, sharex=True, sharey=True)
-    # plots[0].imshow(img.get())
-    # plots[0].title.set_text('Upsampled')
-
-    # plots[1].imshow(predicted_img)
-    # plots[1].title.set_text('Prediction')
-
-    # plots[2].imshow(tf.squeeze(img_hr))
-    # plots[2].title.set_text('Original')
-
-    # plt.show()
 
 
 if __name__ == "__main__":

@@ -1,51 +1,27 @@
-import os
 import sys
 import tensorflow as tf
-import matplotlib.pyplot as plt
 
-from tensorflow.python.data.experimental import AUTOTUNE
+from PIL import Image
 from tensorflow.keras.applications.vgg19 import preprocess_input
 
 from models.vgg.vgg import VggBuilder
+from tools.images.image import load_png
 
 
 def main():
+    img_id = 805
 
-    data_dir_low_res = "./.cache/data/DIV2K_valid_LR_bicubic/X4"
-    data_dir_high_res = "./.cache/data/DIV2K_valid_HR"
+    img_hr = load_png(
+        f'./.cache/data/DIV2K_valid_HR/0{img_id}.png', batched=True)
 
-    image_files_low_res = sorted(tf.io.gfile.glob(data_dir_low_res + "/*.png"))
-    image_files_high_res = sorted(tf.io.gfile.glob(
-        data_dir_high_res + "/*.png"))
+    vgg_layers = ['block5_conv4']
+    vgg = VggBuilder(layers=vgg_layers).build(input_shape=(None, None, 3))
 
-    data_set_low_res = tf.data.Dataset.from_tensor_slices(image_files_low_res)
-    data_set_low_res = data_set_low_res.map(tf.io.read_file)
-    data_set_low_res = data_set_low_res.map(lambda x: tf.image.decode_png(
-        x, channels=3), num_parallel_calls=AUTOTUNE)
-
-    data_set_high_res = tf.data.Dataset.from_tensor_slices(
-        image_files_high_res)
-    data_set_high_res = data_set_high_res.map(tf.io.read_file)
-    data_set_high_res = data_set_high_res.map(lambda x: tf.image.decode_png(
-        x, channels=3), num_parallel_calls=AUTOTUNE)
-
-    data_set_training = tf.data.Dataset.zip(
-        data_set_low_res, data_set_high_res)
-
-    data_set_training = data_set_training.batch(1)
-
-    iterator_training = data_set_training.as_numpy_iterator()
-    element_training = list(iterator_training)[9]
-
-    vgg = VggBuilder(layer='block4_conv2').build(
-        input_shape=(None, None, 3))
-
-    vgg_in = preprocess_input(element_training[1])
+    vgg_in = preprocess_input(img_hr)
     prediction = vgg(vgg_in)
 
-    plt.figure()
-    plt.imshow(prediction[0, :, :, 0])
-    plt.show()
+    prediction = tf.squeeze(prediction)
+    Image.fromarray(prediction.numpy()).save("vgg.prediction.png", "PNG")
 
 
 if __name__ == "__main__":
