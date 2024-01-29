@@ -3,23 +3,39 @@ from tensorflow.data import AUTOTUNE
 
 
 class TensorflowImageDataset:
+    """A dataset of images stored in a directory.
+
+    The images are assumed to be PNG files.
+    """
 
     def __init__(self, directory, normalizer=None):
         """Constructor.
 
         Args:
             directory: The directory containing the images.
+            normalizer: An optional function that normalizes the images.
         """
 
         self.__dataset = self.__dataset_from(directory, normalizer)
 
     def batched(self, batch_size=16):
-        """Returns a batched version of the dataset."""
+        """Returns a batched version of the dataset.
+
+        Args:
+            batch_size: The batch size.
+
+        Returns:
+            The batched dataset.
+        """
 
         return self.__dataset.batch(batch_size)
 
     def rgb_mean(self):
-        """Returns the mean of the RGB values of the images."""
+        """Calculates the mean RGB values of the images in the dataset.
+
+        Returns:
+            The mean RGB values.
+        """
 
         sum_red = 0.0
         sum_green = 0.0
@@ -45,9 +61,21 @@ class TensorflowImageDataset:
         return sum_red.numpy(), sum_green.numpy(), sum_blue.numpy()
 
     def dataset(self):
+        """Returns the internal tensorflow dataset.
+
+        Returns:
+            The tensorflow dataset.
+        """
+
         return self.__dataset
 
     def num(self):
+        """Returns the cardinality of the dataset.
+
+        Returns:
+            The cardinality of the dataset.
+        """
+
         return self.__dataset.cardinality().numpy()
 
     def __dataset_from(self, directory, normalizer=None):
@@ -55,25 +83,34 @@ class TensorflowImageDataset:
 
         Args:
             directory: The directory containing the images.
+            normalizer: An optional function that normalizes the images.
 
         Returns:
-            The dataset.
+            The tensorflow dataset.
         """
 
         glob = tf.io.gfile.glob(directory + "/*.png")
         files = sorted(glob)
 
         dataset = tf.data.Dataset.from_tensor_slices(files)
-        dataset = dataset.map(lambda x: tf.io.read_file(x), num_parallel_calls=AUTOTUNE)
-        dataset = dataset.map(lambda x: tf.image.decode_png(x, channels=3), num_parallel_calls=AUTOTUNE)
-        dataset = dataset.map(lambda x: tf.cast(x, tf.float32), num_parallel_calls=AUTOTUNE)
+        dataset = dataset.map(lambda x: tf.io.read_file(x),
+                              num_parallel_calls=AUTOTUNE)
+        dataset = dataset.map(lambda x: tf.image.decode_png(
+            x, channels=3), num_parallel_calls=AUTOTUNE)
+        dataset = dataset.map(lambda x: tf.cast(
+            x, tf.float32), num_parallel_calls=AUTOTUNE)
 
         if normalizer is not None:
             dataset = dataset.map(normalizer, num_parallel_calls=AUTOTUNE)
 
         return dataset
-    
+
+
 class TensorflowImageDatasetBundle:
+    """A bundle of two datasets of images stored in directories.
+
+    One dataset contains the low resolution images and the other dataset contains the high resolution images.
+    """
 
     def __init__(self, dataset_lr: TensorflowImageDataset, dataset_hr: TensorflowImageDataset):
         """Constructor.
@@ -87,31 +124,54 @@ class TensorflowImageDatasetBundle:
         self.__dataset_hr = dataset_hr
 
         if dataset_lr.num() != dataset_hr.num():
-            raise ValueError('The number of samples in the low resolution and high resolution datasets must be the same.')
+            raise ValueError(
+                'The number of samples in the low resolution and high resolution datasets must be the same.')
 
-        self.__dataset = tf.data.Dataset.zip((dataset_lr.dataset(), dataset_hr.dataset()))
-    
+        self.__dataset = tf.data.Dataset.zip(
+            (dataset_lr.dataset(), dataset_hr.dataset()))
+
     def dataset(self):
+        """Returns the internal tensorflow dataset.
+
+        Returns:
+            The tensorflow dataset.
+        """
+
         return self.__dataset
-    
+
     def num(self):
+        """Returns the cardinality of the dataset.
+
+        Returns:
+            The cardinality of the dataset.
+        """
+
         return self.__dataset_lr.num()
-    
 
 
 class TensorflowImagePreprocessor:
+    """Preprocesses a dataset of images."""
 
     def __init__(self, dataset: TensorflowImageDatasetBundle):
         """Constructor.
 
         Args:
-            dataset: The dataset.
+            dataset: The dataset to preprocess.
         """
 
         self.dataset = dataset
 
     def preprocess(self, batch_size=16, crop_size=96, scale=4):
-        """Preprocesses the images."""
+        """Preprocesses the images.
+
+        Args:
+            batch_size: The batch size.
+            crop_size: The crop size.
+            scale: The scale factor.
+
+        Returns:
+            The preprocessed dataset.
+        """
 
         num = self.dataset.num()
         dataset = self.dataset.dataset()
