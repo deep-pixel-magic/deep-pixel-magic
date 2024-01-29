@@ -1,3 +1,4 @@
+import os
 import sys
 import tensorflow as tf
 
@@ -21,7 +22,16 @@ def main():
     prediction = vgg(vgg_in)
 
     prediction = tf.squeeze(prediction)
-    Image.fromarray(prediction.numpy()).save("vgg.prediction.png", "PNG")
+    prediction = tf.round(prediction)
+    prediction = tf.cast(prediction, tf.uint8)
+    prediction = tf.clip_by_value(prediction, 0, 255)
+
+    tf.print(prediction)
+
+    os.makedirs("./.cache/predictions/vgg", exist_ok=True)
+    for channel in range(512):
+        Image.fromarray(prediction[:, :, channel].numpy()).save(
+            f"./.cache/predictions/vgg/vgg.prediction.{channel}.png", "PNG")
 
 
 if __name__ == "__main__":
