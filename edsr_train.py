@@ -1,14 +1,12 @@
 import os
 import sys
-
 import tensorflow as tf
 
 from tensorflow.keras.optimizers.schedules import PiecewiseConstantDecay
 
-from models.srgan.srgan_network import SrganNetwork
-from models.srgan.srgan_trainer import SrganTrainer
-from models.srgan.discriminator_network import SrganDiscriminatorNetwork
-from models.srgan.data_processing import normalize_input_lr, normalize_input_hr
+from models.edsr.edsr_network import EdsrNetwork
+from models.edsr.edsr_trainer import EdsrNetworkTrainer
+from models.edsr.data_processing import normalize_input
 
 from tools.datasets.div2k.tensorflow import TensorflowImageDataset, TensorflowImageDatasetBundle, TensorflowImagePreprocessor
 
@@ -23,9 +21,9 @@ def main():
         crop_size = 96
 
         dataset_lr = TensorflowImageDataset(
-            data_dir_low_res, normalizer=lambda x: normalize_input_lr(x))
+            data_dir_low_res, normalizer=lambda x: normalize_input(x))
         dataset_hr = TensorflowImageDataset(
-            data_dir_high_res, normalizer=lambda x: normalize_input_hr(x))
+            data_dir_high_res, normalizer=lambda x: normalize_input(x))
 
         bundle = TensorflowImageDatasetBundle(dataset_lr, dataset_hr)
 
@@ -38,11 +36,8 @@ def main():
         num_steps_per_epoch = batched_data_set_cardinality
         num_epochs = 1000
 
-        generator = SrganNetwork().build(num_filters=64, num_residual_blocks=16)
-        discriminator = SrganDiscriminatorNetwork(img_res=crop_size).build()
-
-        generator.load_weights(
-            './.cache/models/srgan/generator_pre_trained.weights.h5')
+        model = EdsrNetwork().build(scale=4, num_filters=64,
+                                    num_residual_blocks=16, residual_block_scaling=0.1)
 
         decay_boundaries = [
             (num_epochs // 2) * num_steps_per_epoch,
@@ -53,26 +48,18 @@ def main():
             1e-5,
         ]
 
-        generator_lr = PiecewiseConstantDecay(
+        learning_rate = PiecewiseConstantDecay(
             boundaries=decay_boundaries, values=decay_values)
 
-        discriminator_lr = PiecewiseConstantDecay(
-            boundaries=[(num_epochs // 2) * num_steps_per_epoch], values=decay_values)
-
-        trainer = SrganTrainer(
-            generator=generator,
-            discriminator=discriminator,
-            generator_lr=generator_lr,
-            discriminator_lr=discriminator_lr)
+        trainer = EdsrNetworkTrainer(
+            model=model, learning_rate=learning_rate)
 
         trainer.train(dataset, epochs=num_epochs,
                       steps=batched_data_set_cardinality)
 
-        os.makedirs('./.cache/models/srgan', exist_ok=True)
-        discriminator.save_weights(
-            './.cache/models/srgan/discriminator.weights.h5', overwrite=True)
-        generator.save_weights(
-            './.cache/models/srgan/generator.weights.h5', overwrite=True)
+        os.makedirs('./.cache/models/edsr', exist_ok=True)
+        model.save_weights(
+            './.cache/models/edsr/edsr.weights.h5', overwrite=True)
 
 
 if __name__ == "__main__":

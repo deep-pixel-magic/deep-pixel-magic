@@ -5,19 +5,18 @@ import numpy as np
 import tensorflow as tf
 
 from tensorflow.keras import optimizers
-from tensorflow.python.keras.models import Model
-from tensorflow.keras.applications.vgg19 import VGG19
-from tensorflow.keras.applications.vgg19 import preprocess_input
 
 from models.vgg.vgg import VggBuilder
 from models.common.metrics import compute_psnr, compute_ssim
-from models.common.losses import compute_pixel_loss, compute_perceptual_loss
+from models.common.losses import compute_pixel_loss
+
+from models.edsr.data_processing import denormalize_output
 
 
 class EdsrNetworkTrainer:
     """A helper class for training an EDSR model."""
 
-    def __init__(self, model, learning_rate=1e-4, use_content_loss=False, strategy=None):
+    def __init__(self, model, learning_rate=1e-4, use_content_loss=False):
         """Constructor.
 
         Args:
@@ -26,29 +25,14 @@ class EdsrNetworkTrainer:
             learning_rate: The learning rate.
         """
 
-        self.use_content_loss = use_content_loss
-        self.strategy = strategy
-
-        if use_content_loss:
-            self.vgg_layers = ['block1_conv2', 'block2_conv2',
-                               'block3_conv4', 'block4_conv4', 'block5_conv4']
-            self.vgg_layer_weights = [0.03125, 0.0625, 0.125, 0.25, 0.5]
-
-            self.vgg = VggBuilder(layers=self.vgg_layers).build(
-                input_shape=(None, None, 3))
-
-        self.mean_absolute_error = tf.keras.losses.MeanAbsoluteError()
-        self.mean_squared_error = tf.keras.losses.MeanSquaredError()
-
+        optimizer = optimizers.Adam(learning_rate)
         self.checkpoint = tf.train.Checkpoint(step=tf.Variable(0),
-                                              psnr=tf.Variable(-1.0),
-                                              optimizer=optimizers.Adam(
-                                                  learning_rate),
-                                              model=model)
+                                              model=model,
+                                              optimizer=optimizer)
 
         self.checkpoint_manager = tf.train.CheckpointManager(checkpoint=self.checkpoint,
                                                              directory='./.cache/checkpoints/edsr/',
-                                                             max_to_keep=200)
+                                                             max_to_keep=1000)
 
         self.restore()
 
@@ -59,7 +43,6 @@ class EdsrNetworkTrainer:
             dataset: The training dataset.
             epochs: The number of epochs.
             steps: The number of steps per epoch.
-
         """
 
         checkpoint = self.checkpoint
@@ -87,15 +70,19 @@ class EdsrNetworkTrainer:
 
                 self.__log(f'epoch: {current_epoch + 1}/{epochs}')
 
-                average_loss = 0
+                avg_loss = 0
+                avg_psnr = 0
+                avg_ssim = 0
 
                 for low_res_img, high_res_img in dataset.take(steps):
 
                     current_step = checkpoint.step.numpy()
-                    current_loss, current_psnr, current_ssim, current_lr = self.__train_step(
+                    current_loss, current_psnr, current_ssim = self.__train_step(
                         low_res_img, high_res_img)
 
-                    average_loss += current_loss
+                    avg_loss += current_loss
+                    avg_psnr += current_psnr
+                    avg_ssim += current_ssim
 
                     if not np.any(performed_steps):
                         current_step_in_set = current_step + 1
@@ -103,18 +90,25 @@ class EdsrNetworkTrainer:
                         current_step_in_set = current_step % performed_steps + 1
 
                     log_writer.writerow(
-                        [current_epoch, current_step + 1, current_loss.numpy(), current_psnr.numpy(), current_ssim.numpy()])
+                        [current_epoch + 1, current_step + 1, current_loss.numpy(), current_psnr.numpy(), current_ssim.numpy()])
                     log_file.flush()
 
                     self.__log(
-                        f'step: {current_step_in_set:3.0f}/{steps:3.0f}, completed: {current_step_in_set / steps * 100:3.0f}%, loss: {current_loss.numpy():7.2f}, psnr: {current_psnr.numpy():5.2f}, ssim: {current_ssim.numpy():3.2f}, learning rate: {current_lr.numpy():.10f}', indent_level=1, end='\n', flush=True)
+                        f'step: {current_step_in_set:3.0f}/{steps:3.0f}, completed: {current_step_in_set / steps * 100:3.0f}%, mse(y): {current_loss.numpy():7.2f}, psnr(y): {current_psnr.numpy():5.2f}, ssim(y): {current_ssim.numpy():3.2f}', indent_level=1, end='\n', flush=True)
 
                     checkpoint.step.assign_add(1)
 
                 checkpoint_manager.save()
 
+                avg_loss /= steps
+                avg_psnr /= steps
+                avg_ssim /= steps
+
+                self.__log('-' * 80, indent_level=1, end='\n', flush=True)
+
                 self.__log(
-                    f'done: average loss: {average_loss / steps:.2f}', indent_level=1, end='\n', flush=True)
+                    f'done: mse(y): {avg_loss:6.4f}, psnr(y): {avg_psnr:5.2f}, ssim(y): {avg_ssim:5.2f}', indent_level=1, end='\n', flush=True)
+
                 self.__log('')
 
     def restore(self):
@@ -138,44 +132,29 @@ class EdsrNetworkTrainer:
             The loss.
         """
 
+        model = self.checkpoint.model
         optimizer = self.checkpoint.optimizer
 
         with tf.GradientTape() as tape:
 
-            low_res_img = tf.cast(low_res_img, tf.float32)
-            high_res_img = tf.cast(high_res_img, tf.float32)
+            super_res_img = model(low_res_img, training=True)
 
-            super_res_img = self.checkpoint.model(low_res_img, training=True)
+            loss = compute_pixel_loss(high_res_img, super_res_img)
 
-            loss_value = 0
-
-            if self.use_content_loss:
-                loss_value = compute_perceptual_loss(
-                    high_res_img,
-                    super_res_img,
-                    self.vgg,
-                    self.vgg_layer_weights,
-                    feature_scale=1 / 12.75)
-            else:
-                loss_value = compute_pixel_loss(high_res_img, super_res_img)
-
-            loss = loss_value
-
-            psnr = compute_psnr(high_res_img, super_res_img)
-            ssim = compute_ssim(high_res_img, super_res_img)
-
-        variables = self.checkpoint.model.trainable_variables
+        variables = model.trainable_variables
 
         gradients = tape.gradient(loss, variables)
-
-        if self.strategy:
-            gradients = self.strategy.reduce(tf.distribute.ReduceOp.SUM, gradients, axis=None)
-            # gradients = [self.strategy.reduce(tf.distribute.ReduceOp.MEAN, grad, axis=None) for grad in gradients]
 
         mapped_gradients = zip(gradients, variables)
         optimizer.apply_gradients(mapped_gradients)
 
-        return loss, psnr, ssim, optimizer.lr
+        denorm_hr = denormalize_output(high_res_img)
+        denorm_sr = denormalize_output(super_res_img)
+
+        psnr = compute_psnr(denorm_hr, denorm_sr)
+        ssim = compute_ssim(denorm_hr, denorm_sr)
+
+        return loss, psnr, ssim
 
     def __log(self, message, indent_level=0, end='\n', flush=False):
         """Prints the specified message to the console.

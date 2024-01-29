@@ -18,8 +18,6 @@ class EdsrNetwork:
     def __init__(self):
         """Constructor."""
 
-        self.rgb_mean = np.array([0.4488, 0.4371, 0.4040]) * 255
-
     def build(self, scale, num_filters=64, num_residual_blocks=8, residual_block_scaling=None, trainable=True):
         """Builds the actual EDSR model.
 
@@ -33,10 +31,8 @@ class EdsrNetwork:
         shape = (None, None, 3)
 
         x_in = Input(shape=shape)
-        x = Lambda(self.__normalize())(x_in)
-
         x = x_res = Conv2D(
-            num_filters, 3, padding='same')(x)
+            num_filters, 3, padding='same')(x_in)
 
         for _ in range(num_residual_blocks):
             x_res = self.__residual_block(
@@ -49,8 +45,6 @@ class EdsrNetwork:
 
         x = self.__upsample_block(x, num_filters, scale)
         x = Conv2D(3, 3, padding='same')(x)
-
-        x = Lambda(self.__denormalize())(x)
 
         model = Model(x_in, x, name="edsr")
         model.trainable = trainable
@@ -149,19 +143,3 @@ class EdsrNetwork:
         """
 
         return lambda x: tf.nn.depth_to_space(input=x, block_size=scale)
-
-    def __normalize(self):
-        """Normalizes the input.
-
-        Assumes an input interval of [0, 255].
-        """
-
-        return lambda x: (x - self.rgb_mean) / 127.5
-
-    def __denormalize(self):
-        """Denormalizes the input.
-
-        Assumes a normalized input interval of [0, 1].
-        """
-
-        return lambda x: x * 127.5 + self.rgb_mean

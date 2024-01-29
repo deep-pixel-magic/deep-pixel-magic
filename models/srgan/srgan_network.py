@@ -16,8 +16,6 @@ class SrganNetwork:
     def __init__(self):
         """Constructor."""
 
-        self.rgb_mean = np.array([0.4488, 0.4371, 0.4040]) * 255
-
     def build(self, num_filters=64, num_residual_blocks=16, trainable=True):
         """Builds the actual SRGAN model.
 

@@ -1,8 +1,6 @@
 import sys
-import os
-os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
+
 import tensorflow as tf
-import matplotlib.pyplot as plt
 from PIL import Image
 
 from models.edsr.edsr_network import EdsrNetwork
@@ -34,7 +32,7 @@ def main():
     img_to_save.save("prediction.png", "PNG")
 
     img = Div2kImage('./.cache/data/',
-                    dataset_info=div2k.Info(subset='valid', resolution='LR', sampling='bicubic', scale='X4'))
+                     dataset_info=div2k.Info(subset='valid', resolution='LR', sampling='bicubic', scale='X4'))
 
     img.load(805)
     img.scale(4)
