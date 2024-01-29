@@ -13,9 +13,7 @@ from tools.images.image import load_png
 
 
 def main():
-    # img_id = 805
-    img_id = 818
-    # img_id = 886
+    img_id = 805
 
     img_lr = load_png(
         f'./.cache/data/DIV2K_valid_LR_bicubic/X4/0{img_id}x4.png')

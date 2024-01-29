@@ -1,4 +1,5 @@
 import sys
+from models.edsr.data_processing import normalize_input, postprocess_output
 
 import tensorflow as tf
 from PIL import Image
@@ -12,29 +13,34 @@ from tools.images.image import load_png
 
 
 def main():
-    img_lr = load_png('./.cache/data/DIV2K_valid_LR_bicubic/X4/0805x4.png')
-    img_hr = load_png('./.cache/data/DIV2K_valid_HR/0805.png')
+    img_id = 805
 
-    model = EdsrNetwork().build(scale=4, num_filters=256,
-                                num_residual_blocks=32, residual_block_scaling=0.1, trainable=False)
+    img_lr = load_png(
+        f'./.cache/data/DIV2K_valid_LR_bicubic/X4/0{img_id}x4.png')
+    img_hr = load_png(
+        f'./.cache/data/DIV2K_valid_HR/0{img_id}.png', batched=False)
+
+    img_lr_norm = normalize_input(img_lr)
+
+    model = EdsrNetwork().build(scale=4, num_filters=64,
+                                num_residual_blocks=16, residual_block_scaling=0.1, trainable=False)
 
     latest = tf.train.latest_checkpoint('./.cache/models/edsr')
     model.load_weights(latest)
 
     prediction = model.predict(img_lr)
 
-    predicted_img = prediction[0]
-    predicted_img = tf.round(predicted_img)
-    predicted_img = tf.clip_by_value(predicted_img, 0, 255)
-    predicted_img = tf.cast(predicted_img, tf.uint8)
+    predicted_img = tf.squeeze(prediction)
+    predicted_img = postprocess_output(predicted_img)
 
-    img_to_save = Image.fromarray(predicted_img.numpy())
-    img_to_save.save("prediction.png", "PNG")
+    Image.fromarray(predicted_img.numpy()).save("edsr.prediction.png", "PNG")
+    Image.fromarray(tf.cast(img_hr, tf.uint8).numpy()
+                    ).save("edsr.original.png", "PNG")
 
     img = Div2kImage('./.cache/data/',
                      dataset_info=div2k.Info(subset='valid', resolution='LR', sampling='bicubic', scale='X4'))
 
-    img.load(805)
+    img.load(img_id)
     img.scale(4)
     img.save("upsampled.png")
 
