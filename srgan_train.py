@@ -13,7 +13,7 @@ from tools.datasets.div2k.tensorflow import TensorflowImageDataset, TensorflowIm
 
 
 def main():
-    with tf.device('/GPU:2'):
+    with tf.device('/GPU:0'):
 
         data_dir_low_res = "./.cache/data/DIV2K_train_LR_bicubic/X4"
         data_dir_high_res = "./.cache/data/DIV2K_train_HR"
@@ -29,7 +29,11 @@ def main():
         bundle = TensorflowImageDatasetBundle(dataset_lr, dataset_hr)
 
         dataset = TensorflowImagePreprocessor(bundle).preprocess(
-            batch_size=batch_size, crop_size=crop_size, scale=4)
+            batch_size=batch_size,
+            crop_size=crop_size,
+            scale=4,
+            shuffle_buffer_size=batch_size,
+            cache=False)
 
         initial_data_set_cardinality = bundle.num()
         batched_data_set_cardinality = initial_data_set_cardinality // batch_size

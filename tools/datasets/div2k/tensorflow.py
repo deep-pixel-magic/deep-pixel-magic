@@ -161,27 +161,30 @@ class TensorflowImagePreprocessor:
 
         self.dataset = dataset
 
-    def preprocess(self, batch_size=16, crop_size=96, scale=4):
+    def preprocess(self, batch_size=16, crop_size=96, scale=4, shuffle_buffer_size=16, cache=False):
         """Preprocesses the images.
 
         Args:
             batch_size: The batch size.
             crop_size: The crop size.
             scale: The scale factor.
+            shuffle_buffer_size: The shuffle buffer size.
+            cache: Whether to cache the dataset.
 
         Returns:
             The preprocessed dataset.
         """
 
-        num = self.dataset.num()
         dataset = self.dataset.dataset()
 
         crop_operator = RandomCropOperator(crop_size, scale)
         flip_operator = RandomFlipOperator()
         rotate_operator = RandomRotateOperator()
 
-        dataset = dataset.cache()
-        dataset = dataset.shuffle(buffer_size=num)
+        if cache:
+            dataset = dataset.cache()
+
+        dataset = dataset.shuffle(buffer_size=shuffle_buffer_size)
 
         dataset = dataset.map(crop_operator, num_parallel_calls=AUTOTUNE)
         dataset = dataset.map(flip_operator, num_parallel_calls=AUTOTUNE)

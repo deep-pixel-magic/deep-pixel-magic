@@ -13,29 +13,33 @@ from tools.datasets.div2k.tensorflow import TensorflowImageDataset, TensorflowIm
 
 
 def main():
-    data_dir_low_res = "./.cache/data/DIV2K_train_LR_bicubic/X4"
-    data_dir_high_res = "./.cache/data/DIV2K_train_HR"
+    with tf.device('/GPU:0'):
 
-    batch_size = 16
-    crop_size = 96
+        data_dir_low_res = "./.cache/data/DIV2K_train_LR_bicubic/X4"
+        data_dir_high_res = "./.cache/data/DIV2K_train_HR"
 
-    dataset_lr = TensorflowImageDataset(
-        data_dir_low_res, normalizer=lambda x: normalize_input_lr(x))
-    dataset_hr = TensorflowImageDataset(
-        data_dir_high_res, normalizer=lambda x: normalize_input_hr(x))
+        batch_size = 16
+        crop_size = 96
 
-    bundle = TensorflowImageDatasetBundle(dataset_lr, dataset_hr)
+        dataset_lr = TensorflowImageDataset(
+            data_dir_low_res, normalizer=lambda x: normalize_input_lr(x))
+        dataset_hr = TensorflowImageDataset(
+            data_dir_high_res, normalizer=lambda x: normalize_input_hr(x))
 
-    dataset = TensorflowImagePreprocessor(bundle).preprocess(
-        batch_size=batch_size, crop_size=crop_size, scale=4)
+        bundle = TensorflowImageDatasetBundle(dataset_lr, dataset_hr)
 
-    initial_data_set_cardinality = bundle.num()
-    batched_data_set_cardinality = initial_data_set_cardinality // batch_size
+        dataset = TensorflowImagePreprocessor(bundle).preprocess(
+            batch_size=batch_size,
+            crop_size=crop_size,
+            scale=4,
+            shuffle_buffer_size=batch_size,
+            cache=False)
 
-    num_steps_per_epoch = batched_data_set_cardinality
-    num_epochs = 1000
+        initial_data_set_cardinality = bundle.num()
+        batched_data_set_cardinality = initial_data_set_cardinality // batch_size
 
-    with tf.device('/GPU:2'):
+        num_steps_per_epoch = batched_data_set_cardinality
+        num_epochs = 1000
 
         generator = SrganNetwork().build(num_filters=64, num_residual_blocks=16)
         discriminator = SrganDiscriminatorNetwork(img_res=crop_size).build()

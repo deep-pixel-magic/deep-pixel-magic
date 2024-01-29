@@ -12,29 +12,33 @@ from tools.datasets.div2k.tensorflow import TensorflowImageDataset, TensorflowIm
 
 
 def main():
-    data_dir_low_res = "./.cache/data/DIV2K_train_LR_bicubic/X4"
-    data_dir_high_res = "./.cache/data/DIV2K_train_HR"
-
-    batch_size = 16
-    crop_size = 96
-
-    dataset_lr = TensorflowImageDataset(
-        data_dir_low_res, normalizer=lambda x: normalize_input_lr(x))
-    dataset_hr = TensorflowImageDataset(
-        data_dir_high_res, normalizer=lambda x: normalize_input_hr(x))
-
-    bundle = TensorflowImageDatasetBundle(dataset_lr, dataset_hr)
-
-    dataset = TensorflowImagePreprocessor(bundle).preprocess(
-        batch_size=batch_size, crop_size=crop_size, scale=4)
-
-    initial_data_set_cardinality = bundle.num()
-    batched_data_set_cardinality = initial_data_set_cardinality // batch_size
-
-    num_steps_per_epoch = batched_data_set_cardinality
-    num_pre_train_epochs = 1000
-
     with tf.device('/GPU:0'):
+
+        data_dir_low_res = "./.cache/data/DIV2K_train_LR_bicubic/X4"
+        data_dir_high_res = "./.cache/data/DIV2K_train_HR"
+
+        batch_size = 16
+        crop_size = 96
+
+        dataset_lr = TensorflowImageDataset(
+            data_dir_low_res, normalizer=lambda x: normalize_input_lr(x))
+        dataset_hr = TensorflowImageDataset(
+            data_dir_high_res, normalizer=lambda x: normalize_input_hr(x))
+
+        bundle = TensorflowImageDatasetBundle(dataset_lr, dataset_hr)
+
+        dataset = TensorflowImagePreprocessor(bundle).preprocess(
+            batch_size=batch_size,
+            crop_size=crop_size,
+            scale=4,
+            shuffle_buffer_size=batch_size,
+            cache=False)
+
+        initial_data_set_cardinality = bundle.num()
+        batched_data_set_cardinality = initial_data_set_cardinality // batch_size
+
+        num_steps_per_epoch = batched_data_set_cardinality
+        num_pre_train_epochs = 1000
 
         generator = SrganNetwork().build(num_filters=64, num_residual_blocks=16)
 

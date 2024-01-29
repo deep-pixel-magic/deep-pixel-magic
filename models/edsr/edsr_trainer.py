@@ -94,21 +94,20 @@ class EdsrNetworkTrainer:
                     log_file.flush()
 
                     self.__log(
-                        f'step: {current_step_in_set:3.0f}/{steps:3.0f}, completed: {current_step_in_set / steps * 100:3.0f}%, mse(y): {current_loss.numpy():7.2f}, psnr(y): {current_psnr.numpy():5.2f}, ssim(y): {current_ssim.numpy():3.2f}', indent_level=1, end='\n', flush=True)
+                        f'step: {current_step_in_set:3.0f}/{steps:3.0f}, completed: {current_step_in_set / steps * 100:3.0f}%, mse(y): {current_loss.numpy():6.4f}, psnr(y): {current_psnr.numpy():5.2f}, ssim(y): {current_ssim.numpy():4.2f}', indent_level=1, end='\n', flush=True)
 
                     checkpoint.step.assign_add(1)
 
-                checkpoint_manager.save()
+                if current_epoch > 0 and (current_epoch + 1) % 10 == 0:
+                    checkpoint_manager.save()
 
                 avg_loss /= steps
                 avg_psnr /= steps
                 avg_ssim /= steps
 
-                self.__log('-' * 80, indent_level=1, end='\n', flush=True)
-
+                self.__log('-' * 77, indent_level=1, end='\n', flush=True)
                 self.__log(
-                    f'done: mse(y): {avg_loss:6.4f}, psnr(y): {avg_psnr:5.2f}, ssim(y): {avg_ssim:5.2f}', indent_level=1, end='\n', flush=True)
-
+                    f'done: {"".rjust(25, " ")} mse(y): {avg_loss:6.4f}, psnr(y): {avg_psnr:5.2f}, ssim(y): {avg_ssim:4.2f}', indent_level=1, end='\n', flush=True)
                 self.__log('')
 
     def restore(self):
