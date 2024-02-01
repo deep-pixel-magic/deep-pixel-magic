@@ -13,7 +13,7 @@ from tools.images.image import load_png
 
 
 def main():
-    img_id = 805
+    img_id = 869
 
     img_lr = load_png(
         f'./.cache/data/DIV2K_valid_LR_bicubic/X4/0{img_id}x4.png')
@@ -24,9 +24,7 @@ def main():
 
     model = EdsrNetwork().build(scale=4, num_filters=64,
                                 num_residual_blocks=16, residual_block_scaling=0.1, trainable=False)
-
-    latest = tf.train.latest_checkpoint('./.cache/models/edsr')
-    model.load_weights(latest)
+    model.load_weights('./.cache/models/edsr/edsr.weights.h5')
 
     prediction = model.predict(img_lr_norm)
 
